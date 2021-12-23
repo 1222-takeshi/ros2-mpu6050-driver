@@ -12,5 +12,10 @@ I have tested it in the following environment.
 
 # Usage
 ``` sh
+sudo chmod 777 /dev/ttyAMA0 # Give permissions to imu, select imu's device.
 ros2 launch imu_driver mpu6050_driver.launch.xml 
 ```
+
+# References
+I referred to the following.  
+https://shizenkarasuzon.hatenablog.com/entry/2019/03/06/163906
