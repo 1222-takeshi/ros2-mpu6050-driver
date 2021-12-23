@@ -109,3 +109,9 @@ float Mpu6050Driver::get2data(int fd, unsigned int reg){
   if(value>=32768) return value-65534;  //32768=0x8000, 65534 = 0xFFFF 
   else return value;
 }
+
+void Mpu6050Driver::calcRollPitch()
+{
+  float roll = std::atan(accel_[1]/accel_[2])*57.324;
+  float pitch = std::atan(-accel_[0]/std::sqrt(accel_[1]*accel_[1] + accel_[2]*accel_[2]))*57.324;
+}
