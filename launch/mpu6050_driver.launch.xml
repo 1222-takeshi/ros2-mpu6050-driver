@@ -2,8 +2,8 @@
 <launch>
   <arg name="output_imu_name" default="/imu_raw" description="output imu raw data" />
 
-  <!-- <node name="imu_driver" pkg="imu_driver" exec="imu_driver" output="screen"> -->
-  <node name="imu_driver" pkg="imu_driver" exec="imu_driver">
+  <node name="imu_driver" pkg="imu_driver" exec="imu_driver" output="screen">
+  <!-- <node name="imu_driver" pkg="imu_driver" exec="imu_driver"> -->
     <remap from="output" to="$(var output_imu_name)"/>
     <!-- <param from="$(var config)" /> -->
   </node>
