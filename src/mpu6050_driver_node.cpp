@@ -64,8 +64,8 @@ void Mpu6050Driver::updateCurrentIMUData()
     ax = get2data(fd, ACCEL_X_OUT)/16384.0;
     ay = get2data(fd, ACCEL_Y_OUT)/16384.0;
     az = get2data(fd, ACCEL_Z_OUT)/16384.0;
-    // printf("gx=%.2f, gy=%.2f, gz=%.2f, ax=%.2f, ay=%.2f, az=%.2f\n", gx,gy,gz,ax,ay,az);
-    msg.header.stamp = clock_->now();
+    
+    msg.header.stamp = now();
     msg.header.frame_id = "imu";
     msg.angular_velocity.x = gx;
     msg.angular_velocity.y = gy;
