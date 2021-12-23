@@ -16,6 +16,7 @@
 #include <rclcpp/timer.hpp>
 #include <memory>
 #include <string>
+#include <cmath>
 #include <utility>
 #include <wiringPi.h>
 #include <wiringPiI2C.h>
@@ -46,37 +47,61 @@ Mpu6050Driver::Mpu6050Driver(const std::string & node_name, const rclcpp::NodeOp
 
 void Mpu6050Driver::onTimer()
 {
-  updateCurrentIMUData();
+  updateCurrentGyroData();
+  updateCurrentAccelData();
+  calcRollPitch();
+
 }
 
-void Mpu6050Driver::updateCurrentIMUData()
+void Mpu6050Driver::updateCurrentGyroData()
 {
   int fd = wiringPiI2CSetup(DEV_ADDR);
   if (fd == -1){
     printf("ERROR : No device!!");
   }else{
-    float gx,gy,gz,ax,ay,az;
+    // float gx,gy,gz,ax,ay,az;
     sensor_msgs::msg::Imu msg;
-    gx = get2data(fd, GYRO_X_OUT)/131.0;
-    gy = get2data(fd, GYRO_Y_OUT)/131.0;
-    gz = get2data(fd, GYRO_Z_OUT)/131.0;
 
-    ax = get2data(fd, ACCEL_X_OUT)/16384.0;
-    ay = get2data(fd, ACCEL_Y_OUT)/16384.0;
-    az = get2data(fd, ACCEL_Z_OUT)/16384.0;
+    gyro_.push_back(get2data(fd, GYRO_X_OUT)/131.0);
+    gyro_.push_back(get2data(fd, GYRO_Y_OUT)/131.0);
+    gyro_.push_back(get2data(fd, GYRO_Z_OUT)/131.0);
     
     msg.header.stamp = now();
     msg.header.frame_id = "imu";
-    msg.angular_velocity.x = gx;
-    msg.angular_velocity.y = gy;
-    msg.angular_velocity.z = gz;
-    msg.linear_acceleration.x = ax;
-    msg.linear_acceleration.y = ay;
-    msg.linear_acceleration.z = az;
+    msg.angular_velocity.x = gyro_[0];
+    msg.angular_velocity.y = gyro_[1];
+    msg.angular_velocity.z = gyro_[2];
+    // msg.linear_acceleration.x = ax;
+    // msg.linear_acceleration.y = ay;
+    // msg.linear_acceleration.z = az;
     imu_pub_->publish(msg);
   }
 }
 
+void Mpu6050Driver::updateCurrentAccelData()
+{
+  int fd = wiringPiI2CSetup(DEV_ADDR);
+  if (fd == -1){
+    printf("ERROR : No device!!");
+  }else{
+    // float gx,gy,gz,ax,ay,az;
+    sensor_msgs::msg::Imu msg;
+
+    accel_.push_back(get2data(fd, ACCEL_X_OUT)/16384.0);
+    accel_.push_back(get2data(fd, ACCEL_Y_OUT)/16384.0);
+    accel_.push_back(get2data(fd, ACCEL_Z_OUT)/16384.0);
+    
+    msg.header.stamp = now();
+    msg.header.frame_id = "imu";
+    // msg.angular_velocity.x = gx;
+    // msg.angular_velocity.y = gy;
+    // msg.angular_velocity.z = gz;
+    msg.linear_acceleration.x = accel_[0];
+    msg.linear_acceleration.y = accel_[1];
+    msg.linear_acceleration.z = accel_[2];
+    imu_pub_->publish(msg);
+  }
+}
 float Mpu6050Driver::get2data(int fd, unsigned int reg){
   unsigned int h_value = wiringPiI2CReadReg8(fd, reg);
   unsigned int l_value = wiringPiI2CReadReg8(fd, reg+1);

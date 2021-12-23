@@ -21,19 +21,25 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <vector>
 
 class Mpu6050Driver : public rclcpp::Node
 {
 public:
   Mpu6050Driver(const std::string & node_name, const rclcpp::NodeOptions & options);
-
+  
 private:
   void onTimer();
-  void updateCurrentIMUData();
+  void updateCurrentGyroData();
+  void updateCurrentAccelData();
+  void calcRollPitch();
   float get2data(int fd, unsigned int reg);
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Clock::SharedPtr clock_;
+  std::vector<float> gyro_;
+  std::vector<float> accel_;
 };
+
 
 #endif  // IMU_DRIVER__MPU6050_DRIVER_HPP_
