@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-  <arg name="output_imu_name" default="/imu_raw" description="output imu raw data" />
+  <arg name="output_imu_name" default="/imu/data_raw" description="output imu raw data" />
 
   <node name="imu_driver" pkg="imu_driver" exec="imu_driver" output="screen">
   <!-- <node name="imu_driver" pkg="imu_driver" exec="imu_driver"> -->
