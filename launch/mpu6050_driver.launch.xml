@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="output_imu_name" default="/imu/data_raw" description="output imu raw data" />
+  <arg name="use_imu_filter" default="false" />
 
   <node name="imu_driver" pkg="imu_driver" exec="imu_driver" output="screen">
   <!-- <node name="imu_driver" pkg="imu_driver" exec="imu_driver"> -->
@@ -8,4 +9,9 @@
     <!-- <param from="$(var config)" /> -->
   </node>
 
+  <!-- imu_filter
+  @brief Package to calculate orientation from raw imu data
+  @param TBD.
+   -->
+  <include if="$(var use_imu_filter)" file="$(find-pkg-share imu_filter_madgwick)/launch/imu_filter.launch.py" />
 </launch>
