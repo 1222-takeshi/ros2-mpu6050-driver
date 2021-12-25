@@ -49,8 +49,8 @@ void Mpu6050Driver::onTimer()
 {
   updateCurrentGyroData();
   updateCurrentAccelData();
-  calcRollPitch();
-
+  calcRollPitch(); 
+  imuDataPublish();
 }
 
 void Mpu6050Driver::updateCurrentGyroData()
@@ -59,22 +59,9 @@ void Mpu6050Driver::updateCurrentGyroData()
   if (fd == -1){
     printf("ERROR : No device!!");
   }else{
-    // float gx,gy,gz,ax,ay,az;
-    sensor_msgs::msg::Imu msg;
-
     gyro_.push_back(get2data(fd, GYRO_X_OUT)/131.0);
     gyro_.push_back(get2data(fd, GYRO_Y_OUT)/131.0);
     gyro_.push_back(get2data(fd, GYRO_Z_OUT)/131.0);
-    
-    msg.header.stamp = now();
-    msg.header.frame_id = "imu";
-    msg.angular_velocity.x = gyro_[0];
-    msg.angular_velocity.y = gyro_[1];
-    msg.angular_velocity.z = gyro_[2];
-    // msg.linear_acceleration.x = ax;
-    // msg.linear_acceleration.y = ay;
-    // msg.linear_acceleration.z = az;
-    imu_pub_->publish(msg);
   }
 }
 
@@ -84,22 +71,9 @@ void Mpu6050Driver::updateCurrentAccelData()
   if (fd == -1){
     printf("ERROR : No device!!");
   }else{
-    // float gx,gy,gz,ax,ay,az;
-    sensor_msgs::msg::Imu msg;
-
     accel_.push_back(get2data(fd, ACCEL_X_OUT)/16384.0);
     accel_.push_back(get2data(fd, ACCEL_Y_OUT)/16384.0);
     accel_.push_back(get2data(fd, ACCEL_Z_OUT)/16384.0);
-    
-    msg.header.stamp = now();
-    msg.header.frame_id = "imu";
-    // msg.angular_velocity.x = gx;
-    // msg.angular_velocity.y = gy;
-    // msg.angular_velocity.z = gz;
-    msg.linear_acceleration.x = accel_[0];
-    msg.linear_acceleration.y = accel_[1];
-    msg.linear_acceleration.z = accel_[2];
-    imu_pub_->publish(msg);
   }
 }
 float Mpu6050Driver::get2data(int fd, unsigned int reg){
@@ -108,6 +82,21 @@ float Mpu6050Driver::get2data(int fd, unsigned int reg){
   float value = (h_value << 8) + l_value;
   if(value>=32768) return value-65534;  //32768=0x8000, 65534 = 0xFFFF 
   else return value;
+}
+
+void Mpu6050Driver::imuDataPublish(){
+  sensor_msgs::msg::Imu msg;
+  msg.header.stamp = now();
+  msg.header.frame_id = "imu";
+  msg.angular_velocity.x = gyro_[0];
+  msg.angular_velocity.y = gyro_[1];
+  msg.angular_velocity.z = gyro_[2];
+  msg.linear_acceleration.x = accel_[0];
+  msg.linear_acceleration.y = accel_[1];
+  msg.linear_acceleration.z = accel_[2];
+  imu_pub_->publish(msg);
+  gyro_.clear();
+  accel_.clear();
 }
 
 void Mpu6050Driver::calcRollPitch()

@@ -33,6 +33,7 @@ private:
   void updateCurrentGyroData();
   void updateCurrentAccelData();
   void calcRollPitch();
+  void imuDataPublish();
   float get2data(int fd, unsigned int reg);
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
