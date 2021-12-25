@@ -50,9 +50,42 @@ void Mpu6050Driver::onTimer()
   updateCurrentGyroData();
   updateCurrentAccelData();
   calcRollPitch(); 
-  
-  sensor_msgs::msg::Imu msg;
+  imuDataPublish();
+}
 
+void Mpu6050Driver::updateCurrentGyroData()
+{
+  int fd = wiringPiI2CSetup(DEV_ADDR);
+  if (fd == -1){
+    printf("ERROR : No device!!");
+  }else{
+    gyro_.push_back(get2data(fd, GYRO_X_OUT)/131.0);
+    gyro_.push_back(get2data(fd, GYRO_Y_OUT)/131.0);
+    gyro_.push_back(get2data(fd, GYRO_Z_OUT)/131.0);
+  }
+}
+
+void Mpu6050Driver::updateCurrentAccelData()
+{
+  int fd = wiringPiI2CSetup(DEV_ADDR);
+  if (fd == -1){
+    printf("ERROR : No device!!");
+  }else{
+    accel_.push_back(get2data(fd, ACCEL_X_OUT)/16384.0);
+    accel_.push_back(get2data(fd, ACCEL_Y_OUT)/16384.0);
+    accel_.push_back(get2data(fd, ACCEL_Z_OUT)/16384.0);
+  }
+}
+float Mpu6050Driver::get2data(int fd, unsigned int reg){
+  unsigned int h_value = wiringPiI2CReadReg8(fd, reg);
+  unsigned int l_value = wiringPiI2CReadReg8(fd, reg+1);
+  float value = (h_value << 8) + l_value;
+  if(value>=32768) return value-65534;  //32768=0x8000, 65534 = 0xFFFF 
+  else return value;
+}
+
+void Mpu6050Driver::imuDataPublish(){
+  sensor_msgs::msg::Imu msg;
   msg.header.stamp = now();
   msg.header.frame_id = "imu";
   msg.angular_velocity.x = gyro_[0];
@@ -64,54 +97,6 @@ void Mpu6050Driver::onTimer()
   imu_pub_->publish(msg);
   gyro_.clear();
   accel_.clear();
-}
-
-void Mpu6050Driver::updateCurrentGyroData()
-{
-  int fd = wiringPiI2CSetup(DEV_ADDR);
-  if (fd == -1){
-    printf("ERROR : No device!!");
-  }else{
-    // float gx,gy,gz,ax,ay,az;
-    // sensor_msgs::msg::Imu msg;
-
-    gyro_.push_back(get2data(fd, GYRO_X_OUT)/131.0);
-    gyro_.push_back(get2data(fd, GYRO_Y_OUT)/131.0);
-    gyro_.push_back(get2data(fd, GYRO_Z_OUT)/131.0);
-
-  }
-}
-
-void Mpu6050Driver::updateCurrentAccelData()
-{
-  int fd = wiringPiI2CSetup(DEV_ADDR);
-  if (fd == -1){
-    printf("ERROR : No device!!");
-  }else{
-    // float gx,gy,gz,ax,ay,az;
-    // sensor_msgs::msg::Imu msg;
-
-    accel_.push_back(get2data(fd, ACCEL_X_OUT)/16384.0);
-    accel_.push_back(get2data(fd, ACCEL_Y_OUT)/16384.0);
-    accel_.push_back(get2data(fd, ACCEL_Z_OUT)/16384.0);
-    
-    // msg.header.stamp = now();
-    // msg.header.frame_id = "imu";
-    // msg.angular_velocity.x = gx;
-    // msg.angular_velocity.y = gy;
-    // msg.angular_velocity.z = gz;
-    // msg.linear_acceleration.x = accel_[0];
-    // msg.linear_acceleration.y = accel_[1];
-    // msg.linear_acceleration.z = accel_[2];
-    // imu_pub_->publish(msg);
-  }
-}
-float Mpu6050Driver::get2data(int fd, unsigned int reg){
-  unsigned int h_value = wiringPiI2CReadReg8(fd, reg);
-  unsigned int l_value = wiringPiI2CReadReg8(fd, reg+1);
-  float value = (h_value << 8) + l_value;
-  if(value>=32768) return value-65534;  //32768=0x8000, 65534 = 0xFFFF 
-  else return value;
 }
 
 void Mpu6050Driver::calcRollPitch()
