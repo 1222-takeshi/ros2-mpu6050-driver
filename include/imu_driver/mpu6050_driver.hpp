@@ -29,6 +29,7 @@ public:
   Mpu6050Driver(const std::string & node_name, const rclcpp::NodeOptions & options);
   
 private:
+  void initializeI2C();
   void onTimer();
   void updateCurrentGyroData();
   void updateCurrentAccelData();
@@ -40,6 +41,7 @@ private:
   rclcpp::Clock::SharedPtr clock_;
   std::vector<float> gyro_;
   std::vector<float> accel_;
+  int fd_;
 };
 
 
