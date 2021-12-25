@@ -43,8 +43,14 @@ Mpu6050Driver::Mpu6050Driver(const std::string & node_name, const rclcpp::NodeOp
   timer_ = std::make_shared<rclcpp::GenericTimer<decltype(on_timer_)>>(
     this->get_clock(), 100ms, std::move(on_timer_), this->get_node_base_interface()->get_context());
   this->get_node_timers_interface()->add_timer(timer_, nullptr);
+  initializeI2C();
 }
-
+void Mpu6050Driver::initializeI2C(){
+  fd_ = wiringPiI2CSetup(DEV_ADDR);
+  if (fd_ == -1){
+    printf("ERROR : No device!!");
+  }
+}
 void Mpu6050Driver::onTimer()
 {
   updateCurrentGyroData();
@@ -55,30 +61,21 @@ void Mpu6050Driver::onTimer()
 
 void Mpu6050Driver::updateCurrentGyroData()
 {
-  int fd = wiringPiI2CSetup(DEV_ADDR);
-  if (fd == -1){
-    printf("ERROR : No device!!");
-  }else{
-    gyro_.push_back(get2data(fd, GYRO_X_OUT)/131.0);
-    gyro_.push_back(get2data(fd, GYRO_Y_OUT)/131.0);
-    gyro_.push_back(get2data(fd, GYRO_Z_OUT)/131.0);
-  }
+    gyro_.push_back(get2data(fd_, GYRO_X_OUT)/131.0);
+    gyro_.push_back(get2data(fd_, GYRO_Y_OUT)/131.0);
+    gyro_.push_back(get2data(fd_, GYRO_Z_OUT)/131.0);
 }
 
 void Mpu6050Driver::updateCurrentAccelData()
 {
-  int fd = wiringPiI2CSetup(DEV_ADDR);
-  if (fd == -1){
-    printf("ERROR : No device!!");
-  }else{
-    accel_.push_back(get2data(fd, ACCEL_X_OUT)/16384.0);
-    accel_.push_back(get2data(fd, ACCEL_Y_OUT)/16384.0);
-    accel_.push_back(get2data(fd, ACCEL_Z_OUT)/16384.0);
-  }
+    accel_.push_back(get2data(fd_, ACCEL_X_OUT)/16384.0);
+    accel_.push_back(get2data(fd_, ACCEL_Y_OUT)/16384.0);
+    accel_.push_back(get2data(fd_, ACCEL_Z_OUT)/16384.0);
 }
-float Mpu6050Driver::get2data(int fd, unsigned int reg){
-  unsigned int h_value = wiringPiI2CReadReg8(fd, reg);
-  unsigned int l_value = wiringPiI2CReadReg8(fd, reg+1);
+
+float Mpu6050Driver::get2data(int fd_, unsigned int reg){
+  unsigned int h_value = wiringPiI2CReadReg8(fd_, reg);
+  unsigned int l_value = wiringPiI2CReadReg8(fd_, reg+1);
   float value = (h_value << 8) + l_value;
   if(value>=32768) return value-65534;  //32768=0x8000, 65534 = 0xFFFF 
   else return value;
