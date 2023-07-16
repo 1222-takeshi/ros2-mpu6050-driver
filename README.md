@@ -3,9 +3,15 @@ This repository assumes that you are using the MPU6050 with a Raspberry Pi.
 
 # Tested environment
 I have tested it in the following environment.
-- Raspberry Pi 3B+
-- ubuntu 20.04
-- ROS2 foxy
+- Raspberry Pi
+  - 3B+
+  - 4 (only build)
+- ubuntu
+  - 20.04
+  - 22.04 (only build)
+- ROS2
+  - foxy
+  - humble (only build)
 
 # requirements
 - WiringPI
