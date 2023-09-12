@@ -3,8 +3,8 @@
 <package format="3">
   <name>imu_driver</name>
   <version>1.0.0</version>
-  <description>The ros2 mpu6050 imu package</description>
-  <maintainer email="m.takeshi1995@gmail.com">ubuntu</maintainer>
+  <description>The ros2 mpu 6050 imu package</description>
+  <maintainer> email="m.takeshi1995@gmail.com" </maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
