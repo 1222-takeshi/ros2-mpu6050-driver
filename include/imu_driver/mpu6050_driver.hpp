@@ -15,19 +15,25 @@
 #ifndef IMU_DRIVER__MPU6050_DRIVER_HPP_
 #define IMU_DRIVER__MPU6050_DRIVER_HPP_
 
+#include "imu_driver/i2c_interface.hpp"
+
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
 #include <memory>
 #include <string>
-#include <iostream>
 #include <vector>
 
 class Mpu6050Driver : public rclcpp::Node
 {
 public:
-  Mpu6050Driver(const std::string & node_name, const rclcpp::NodeOptions & options);
-  
+  /// Constructor.
+  /// \param i2c  I2C backend to use. Pass nullptr to use the production wiringPi implementation.
+  Mpu6050Driver(
+    const std::string & node_name,
+    const rclcpp::NodeOptions & options,
+    II2CInterface * i2c = nullptr);
+
 private:
   void initializeI2C();
   void onTimer();
@@ -36,13 +42,15 @@ private:
   void calcRollPitch();
   void imuDataPublish();
   float get2data(int fd, unsigned int reg);
+
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Clock::SharedPtr clock_;
   std::vector<float> gyro_;
   std::vector<float> accel_;
-  int fd_;
-};
 
+  std::unique_ptr<II2CInterface> owned_i2c_;  ///< Owns the instance when created internally.
+  II2CInterface * i2c_;                        ///< Non-owning pointer used for all I2C calls.
+  int fd_ = -1;                                ///< I2C file descriptor; -1 means not initialized.
+};
 
 #endif  // IMU_DRIVER__MPU6050_DRIVER_HPP_
