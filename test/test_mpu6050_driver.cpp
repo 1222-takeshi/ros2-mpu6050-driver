@@ -20,8 +20,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
-#include <map>
 #include <chrono>
+#include <map>
+#include <thread>
 
 // ---------------------------------------------------------------------------
 // Mock I2C implementation for testing without real hardware
@@ -30,14 +31,11 @@
 class MockI2C : public II2CInterface
 {
 public:
-  int setup_return_value = 5;  // Simulated valid file descriptor
-  std::map<int, int> reg_values;   // Registers to return on readReg8
-  std::map<int, int> written_regs; // Records of writeReg8 calls
+  int setup_return_value = 5;      ///< Simulated valid file descriptor
+  std::map<int, int> reg_values;   ///< Values returned by readReg8
+  std::map<int, int> written_regs; ///< Records of writeReg8 calls
 
-  int setup(int /*dev_addr*/) override
-  {
-    return setup_return_value;
-  }
+  int setup(int /*dev_addr*/) override { return setup_return_value; }
 
   int readReg8(int /*fd*/, int reg) override
   {
@@ -53,11 +51,13 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// Helper: create a node and spin once to trigger the first timer callback
+// Helper: spin the node until a message arrives or timeout elapses.
+// The driver timer fires every 100 ms; we wait up to 1 s.
 // ---------------------------------------------------------------------------
 
 static sensor_msgs::msg::Imu::SharedPtr spinAndCapture(
-  std::shared_ptr<Mpu6050Driver> node)
+  std::shared_ptr<Mpu6050Driver> node,
+  std::chrono::milliseconds timeout = std::chrono::milliseconds(1000))
 {
   sensor_msgs::msg::Imu::SharedPtr received;
   auto sub = node->create_subscription<sensor_msgs::msg::Imu>(
@@ -66,39 +66,20 @@ static sensor_msgs::msg::Imu::SharedPtr spinAndCapture(
       received = msg;
     });
 
-  // Spin with a short timeout; the timer fires at 100 ms.
-  auto start = std::chrono::steady_clock::now();
-  while (!received) {
+  auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (!received && std::chrono::steady_clock::now() < deadline) {
     rclcpp::spin_some(node);
-    auto elapsed = std::chrono::steady_clock::now() - start;
-    if (elapsed > std::chrono::milliseconds(500)) {
-      break;
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   return received;
 }
 
 // ---------------------------------------------------------------------------
 // Test suite
+// rclcpp::init / shutdown are handled once in main() below.
 // ---------------------------------------------------------------------------
 
-class Mpu6050DriverTest : public ::testing::Test
-{
-protected:
-  void SetUp() override
-  {
-    rclcpp::init(0, nullptr);
-  }
-
-  void TearDown() override
-  {
-    rclcpp::shutdown();
-  }
-};
-
-// --- Initialization tests ---------------------------------------------------
-
-TEST_F(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
+TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
 {
   // PWR_MGMT_1 (0x6B) must be written with 0x00 to wake MPU6050 from sleep.
   MockI2C mock;
@@ -111,23 +92,22 @@ TEST_F(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
     << "PWR_MGMT_1 must be cleared to 0 to exit sleep mode";
 }
 
-TEST_F(Mpu6050DriverTest, HandlesI2CSetupFailureGracefully)
+TEST(Mpu6050DriverTest, HandlesI2CSetupFailureGracefully)
 {
   // When the I2C device is not found, the node must not crash.
   MockI2C mock;
-  mock.setup_return_value = -1;  // Simulate missing device
+  mock.setup_return_value = -1;
   rclcpp::NodeOptions opts;
 
   ASSERT_NO_THROW({
     auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
-    // Timer fires but fd == -1; node must return early without segfault.
+    // Timer fires with fd==-1; must return early without UB.
     rclcpp::spin_some(node);
   });
 }
 
-TEST_F(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
+TEST(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
 {
-  // If setup() returns -1, no register writes should occur.
   MockI2C mock;
   mock.setup_return_value = -1;
   rclcpp::NodeOptions opts;
@@ -137,9 +117,7 @@ TEST_F(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
     << "PWR_MGMT_1 must not be written when I2C setup failed";
 }
 
-// --- Data conversion tests --------------------------------------------------
-
-TEST_F(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)
+TEST(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)
 {
   // Raw = 0x1000 = 4096 => accel_x = 4096 / 16384.0 = 0.25 g
   MockI2C mock;
@@ -153,10 +131,11 @@ TEST_F(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)
   EXPECT_FLOAT_EQ(msg->linear_acceleration.x, 0.25f);
 }
 
-TEST_F(Mpu6050DriverTest, NegativeAccelValueConvertedCorrectly)
+TEST(Mpu6050DriverTest, NegativeAccelValueConvertedCorrectly)
 {
-  // Raw = 0x8000 = 32768.  Two's complement => -32768 => -32768/16384 = -2.0 g
-  // Bug: old code used value-65534, giving -32766/16384 = -1.9999...
+  // Raw = 0x8000 = 32768 => two's complement: 32768 - 65536 = -32768
+  // => accel_x = -32768 / 16384.0 = -2.0 g
+  // Regression: old code used value-65534, yielding -1.9999... instead of -2.0
   MockI2C mock;
   mock.reg_values[0x3b] = 0x80;  // ACCEL_X high byte
   mock.reg_values[0x3c] = 0x00;  // ACCEL_X low byte
@@ -168,12 +147,12 @@ TEST_F(Mpu6050DriverTest, NegativeAccelValueConvertedCorrectly)
   EXPECT_FLOAT_EQ(msg->linear_acceleration.x, -2.0f);
 }
 
-TEST_F(Mpu6050DriverTest, MaxNegativeAccelValue)
+TEST(Mpu6050DriverTest, MaxNegativeAccelValue)
 {
-  // Raw = 0xFFFF = 65535 => two's complement = -1 => -1/16384 = -0.000061...
+  // Raw = 0xFFFF = 65535 => two's complement: -1 => -1 / 16384.0
   MockI2C mock;
-  mock.reg_values[0x3b] = 0xFF;  // ACCEL_X high byte
-  mock.reg_values[0x3c] = 0xFF;  // ACCEL_X low byte
+  mock.reg_values[0x3b] = 0xFF;
+  mock.reg_values[0x3c] = 0xFF;
   rclcpp::NodeOptions opts;
   auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
 
@@ -182,9 +161,9 @@ TEST_F(Mpu6050DriverTest, MaxNegativeAccelValue)
   EXPECT_NEAR(msg->linear_acceleration.x, -1.0f / 16384.0f, 1e-6f);
 }
 
-TEST_F(Mpu6050DriverTest, MaxPositiveAccelValue)
+TEST(Mpu6050DriverTest, MaxPositiveAccelValue)
 {
-  // Raw = 0x7FFF = 32767 => 32767/16384 = 1.9999...
+  // Raw = 0x7FFF = 32767 => 32767 / 16384.0
   MockI2C mock;
   mock.reg_values[0x3b] = 0x7F;
   mock.reg_values[0x3c] = 0xFF;
@@ -196,14 +175,12 @@ TEST_F(Mpu6050DriverTest, MaxPositiveAccelValue)
   EXPECT_NEAR(msg->linear_acceleration.x, 32767.0f / 16384.0f, 1e-4f);
 }
 
-// --- Gyroscope scaling tests ------------------------------------------------
-
-TEST_F(Mpu6050DriverTest, GyroScalingApplied)
+TEST(Mpu6050DriverTest, GyroScalingApplied)
 {
-  // Raw = 131 (0x0083) => angular_velocity.x = 131/131 = 1.0
+  // Raw = 0x0083 = 131 => angular_velocity.x = 131 / 131.0 = 1.0
   MockI2C mock;
-  mock.reg_values[0x43] = 0x00;  // GYRO_X high byte
-  mock.reg_values[0x44] = 0x83;  // GYRO_X low byte: 0x83 = 131
+  mock.reg_values[0x43] = 0x00;
+  mock.reg_values[0x44] = 0x83;
   rclcpp::NodeOptions opts;
   auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
 
@@ -212,9 +189,10 @@ TEST_F(Mpu6050DriverTest, GyroScalingApplied)
   EXPECT_NEAR(msg->angular_velocity.x, 1.0f, 1e-4f);
 }
 
-TEST_F(Mpu6050DriverTest, NegativeGyroScalingApplied)
+TEST(Mpu6050DriverTest, NegativeGyroScalingApplied)
 {
-  // Raw = 0xFF7D = 65405 => two's complement: 65405-65536 = -131 => -131/131 = -1.0
+  // Raw = 0xFF7D = 65405 => two's complement: 65405 - 65536 = -131
+  // => angular_velocity.x = -131 / 131.0 = -1.0
   MockI2C mock;
   mock.reg_values[0x43] = 0xFF;
   mock.reg_values[0x44] = 0x7D;
@@ -226,9 +204,7 @@ TEST_F(Mpu6050DriverTest, NegativeGyroScalingApplied)
   EXPECT_NEAR(msg->angular_velocity.x, -1.0f, 1e-4f);
 }
 
-// --- IMU message format tests -----------------------------------------------
-
-TEST_F(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
+TEST(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
 {
   MockI2C mock;
   rclcpp::NodeOptions opts;
@@ -239,7 +215,7 @@ TEST_F(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
   EXPECT_EQ(msg->header.frame_id, "imu");
 }
 
-TEST_F(Mpu6050DriverTest, ImuMessageTimestampIsSet)
+TEST(Mpu6050DriverTest, ImuMessageTimestampIsSet)
 {
   MockI2C mock;
   rclcpp::NodeOptions opts;
@@ -247,27 +223,26 @@ TEST_F(Mpu6050DriverTest, ImuMessageTimestampIsSet)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  // Timestamp should be non-zero (steady_clock returns non-zero in tests)
   const auto & stamp = msg->header.stamp;
   EXPECT_TRUE(stamp.sec != 0 || stamp.nanosec != 0)
     << "Message timestamp must be filled in";
 }
 
-TEST_F(Mpu6050DriverTest, AllAxesPublished)
+TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
 {
   // Set distinct values on all 6 axes to verify they are mapped correctly.
   MockI2C mock;
-  // Accel X: raw = 0x0200 = 512 => 512/16384 = 0.03125
+  // Accel X: raw = 0x0200 = 512  => 512  / 16384.0 = 0.03125
   mock.reg_values[0x3b] = 0x02; mock.reg_values[0x3c] = 0x00;
-  // Accel Y: raw = 0x0400 = 1024 => 1024/16384 = 0.0625
+  // Accel Y: raw = 0x0400 = 1024 => 1024 / 16384.0 = 0.0625
   mock.reg_values[0x3d] = 0x04; mock.reg_values[0x3e] = 0x00;
-  // Accel Z: raw = 0x0800 = 2048 => 2048/16384 = 0.125
+  // Accel Z: raw = 0x0800 = 2048 => 2048 / 16384.0 = 0.125
   mock.reg_values[0x3f] = 0x08; mock.reg_values[0x40] = 0x00;
-  // Gyro X: raw = 0x0083 = 131 => 131/131 = 1.0
+  // Gyro X: raw = 0x0083 = 131   => 131  / 131.0   = 1.0
   mock.reg_values[0x43] = 0x00; mock.reg_values[0x44] = 0x83;
-  // Gyro Y: raw = 0x0106 = 262 => 262/131 = 2.0
+  // Gyro Y: raw = 0x0106 = 262   => 262  / 131.0   = 2.0
   mock.reg_values[0x45] = 0x01; mock.reg_values[0x46] = 0x06;
-  // Gyro Z: raw = 0x0189 = 393 => 393/131 = 3.0
+  // Gyro Z: raw = 0x0189 = 393   => 393  / 131.0   = 3.0
   mock.reg_values[0x47] = 0x01; mock.reg_values[0x48] = 0x89;
 
   rclcpp::NodeOptions opts;
@@ -287,6 +262,9 @@ TEST_F(Mpu6050DriverTest, AllAxesPublished)
 
 int main(int argc, char ** argv)
 {
+  rclcpp::init(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  int result = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return result;
 }
