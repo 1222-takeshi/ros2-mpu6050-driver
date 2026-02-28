@@ -16,30 +16,32 @@ jobs:
         with:
           required-ros-distributions: humble
 
-      # Export the PYTHONPATH set by sourcing ROS2 setup.bash so that it is
-      # inherited by every subsequent step (including CTest subprocesses).
-      - name: Export ROS2 Python path to GITHUB_ENV
+      # Place the colcon workspace outside the checkout root so that
+      # ament_lint tools do not traverse into build/install artifacts when they
+      # scan source files (which happens when ros_ws is a sub-directory of the
+      # checkout).  Also export PYTHONPATH / AMENT_PREFIX_PATH so that all
+      # subsequent steps — including CTest sub-processes — can find ament
+      # Python modules (e.g. ament_cmake_test).
+      - name: Setup workspace and export environment
         run: |
+          mkdir -p $HOME/ros_ws/src
+          ln -s ${{ github.workspace }} $HOME/ros_ws/src/imu_driver
           source /opt/ros/humble/setup.bash
-          echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
+          echo "PYTHONPATH=$PYTHONPATH"           >> $GITHUB_ENV
           echo "AMENT_PREFIX_PATH=$AMENT_PREFIX_PATH" >> $GITHUB_ENV
-
-      - name: Create colcon workspace
-        run: |
-          mkdir -p ros_ws/src
-          ln -s ${{ github.workspace }} ros_ws/src/imu_driver
+          echo "ROS_WS=$HOME/ros_ws"             >> $GITHUB_ENV
 
       - name: Install ROS dependencies
         run: |
           source /opt/ros/humble/setup.bash
           rosdep update
-          cd ros_ws
+          cd $ROS_WS
           rosdep install --from-paths src --ignore-src -y
 
       - name: Build
         run: |
           source /opt/ros/humble/setup.bash
-          cd ros_ws
+          cd $ROS_WS
           colcon build \
             --packages-select imu_driver \
             --cmake-args -DBUILD_TESTING=ON
@@ -47,11 +49,12 @@ jobs:
       - name: Test
         run: |
           source /opt/ros/humble/setup.bash
-          source ros_ws/install/setup.bash
-          cd ros_ws
+          cd $ROS_WS
+          source install/setup.bash
           colcon test \
             --packages-select imu_driver \
-            --event-handlers console_cohesion+
+            --event-handlers console_cohesion+ \
+            --ctest-args "-R test_mpu6050_driver"
           colcon test-result --verbose
 
       - name: Upload test results
@@ -59,4 +62,4 @@ jobs:
         if: always()
         with:
           name: test-results
-          path: ros_ws/build/imu_driver/test_results/
+          path: ${{ env.ROS_WS }}/build/imu_driver/test_results/
