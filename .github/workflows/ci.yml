@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      # Place the colcon workspace outside the checkout root so that
+      # ament_lint tools do not traverse into build/install artifacts when they
+      # scan source files (which happens when ros_ws is a sub-directory of the
+      # checkout).  Also export PYTHONPATH / AMENT_PREFIX_PATH so that all
+      # subsequent steps — including CTest sub-processes — can find ament
+      # Python modules (e.g. ament_cmake_test).
+      - name: Setup workspace and export environment
+        run: |
+          mkdir -p $HOME/ros_ws/src
+          ln -s ${{ github.workspace }} $HOME/ros_ws/src/imu_driver
+          source /opt/ros/humble/setup.bash
+          echo "PYTHONPATH=$PYTHONPATH"           >> $GITHUB_ENV
+          echo "AMENT_PREFIX_PATH=$AMENT_PREFIX_PATH" >> $GITHUB_ENV
+          echo "ROS_WS=$HOME/ros_ws"             >> $GITHUB_ENV
+
+      - name: Install ROS dependencies
+        run: |
+          source /opt/ros/humble/setup.bash
+          rosdep update
+          cd $ROS_WS
+          rosdep install --from-paths src --ignore-src -y
+
+      - name: Build
+        run: |
+          source /opt/ros/humble/setup.bash
+          cd $ROS_WS
+          colcon build \
+            --packages-select imu_driver \
+            --cmake-args -DBUILD_TESTING=ON
+
+      - name: Test
+        run: |
+          source /opt/ros/humble/setup.bash
+          cd $ROS_WS
+          source install/setup.bash
+          colcon test \
+            --packages-select imu_driver \
+            --event-handlers console_cohesion+ \
+            --ctest-args -R test_mpu6050_driver
+          colcon test-result --verbose
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ${{ env.ROS_WS }}/build/imu_driver/test_results/
