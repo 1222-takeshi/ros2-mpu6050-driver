@@ -32,6 +32,7 @@ jobs:
       - name: Install ROS dependencies
         run: |
           source /opt/ros/humble/setup.bash
+          rosdep update
           cd ros_ws
           rosdep install --from-paths src --ignore-src -y
 
