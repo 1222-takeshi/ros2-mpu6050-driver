@@ -16,16 +16,42 @@ jobs:
         with:
           required-ros-distributions: humble
 
-      - uses: ros-tooling/action-ros-ci@v0.3
-        with:
-          package-name: imu_driver
-          target-ros2-distro: humble
-          colcon-defaults: |
-            {
-              "build": {
-                "cmake-args": ["-DBUILD_TESTING=ON"]
-              }
-            }
+      # Export the PYTHONPATH set by sourcing ROS2 setup.bash so that it is
+      # inherited by every subsequent step (including CTest subprocesses).
+      - name: Export ROS2 Python path to GITHUB_ENV
+        run: |
+          source /opt/ros/humble/setup.bash
+          echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
+          echo "AMENT_PREFIX_PATH=$AMENT_PREFIX_PATH" >> $GITHUB_ENV
+
+      - name: Create colcon workspace
+        run: |
+          mkdir -p ros_ws/src
+          ln -s ${{ github.workspace }} ros_ws/src/imu_driver
+
+      - name: Install ROS dependencies
+        run: |
+          source /opt/ros/humble/setup.bash
+          cd ros_ws
+          rosdep install --from-paths src --ignore-src -y
+
+      - name: Build
+        run: |
+          source /opt/ros/humble/setup.bash
+          cd ros_ws
+          colcon build \
+            --packages-select imu_driver \
+            --cmake-args -DBUILD_TESTING=ON
+
+      - name: Test
+        run: |
+          source /opt/ros/humble/setup.bash
+          source ros_ws/install/setup.bash
+          cd ros_ws
+          colcon test \
+            --packages-select imu_driver \
+            --event-handlers console_cohesion+
+          colcon test-result --verbose
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
