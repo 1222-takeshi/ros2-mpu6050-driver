@@ -38,8 +38,7 @@ Mpu6050Driver::Mpu6050Driver(
   const std::string & node_name,
   const rclcpp::NodeOptions & node_options,
   II2CInterface * i2c)
-: rclcpp::Node(node_name, node_options),
-  fd_(-1)
+: rclcpp::Node(node_name, node_options)
 {
   if (i2c == nullptr) {
     owned_i2c_ = std::make_unique<WiringPiI2C>();

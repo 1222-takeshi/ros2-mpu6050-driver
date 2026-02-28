@@ -79,12 +79,19 @@ static sensor_msgs::msg::Imu::SharedPtr spinAndCapture(
 // rclcpp::init / shutdown are handled once in main() below.
 // ---------------------------------------------------------------------------
 
+/// Returns a unique node name derived from the current test case name.
+static std::string testNodeName()
+{
+  auto * info = ::testing::UnitTest::GetInstance()->current_test_info();
+  return std::string("test_") + info->test_suite_name() + "_" + info->name();
+}
+
 TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
 {
   // PWR_MGMT_1 (0x6B) must be written with 0x00 to wake MPU6050 from sleep.
   MockI2C mock;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   ASSERT_EQ(mock.written_regs.count(0x6B), 1u)
     << "PWR_MGMT_1 (0x6B) must be written during initialization";
@@ -100,7 +107,7 @@ TEST(Mpu6050DriverTest, HandlesI2CSetupFailureGracefully)
   rclcpp::NodeOptions opts;
 
   ASSERT_NO_THROW({
-    auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+    auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
     // Timer fires with fd==-1; must return early without UB.
     rclcpp::spin_some(node);
   });
@@ -111,7 +118,7 @@ TEST(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
   MockI2C mock;
   mock.setup_return_value = -1;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   EXPECT_EQ(mock.written_regs.count(0x6B), 0u)
     << "PWR_MGMT_1 must not be written when I2C setup failed";
@@ -124,7 +131,7 @@ TEST(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)
   mock.reg_values[0x3b] = 0x10;  // ACCEL_X high byte
   mock.reg_values[0x3c] = 0x00;  // ACCEL_X low byte
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr) << "Expected an IMU message to be published";
@@ -140,7 +147,7 @@ TEST(Mpu6050DriverTest, NegativeAccelValueConvertedCorrectly)
   mock.reg_values[0x3b] = 0x80;  // ACCEL_X high byte
   mock.reg_values[0x3c] = 0x00;  // ACCEL_X low byte
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -154,7 +161,7 @@ TEST(Mpu6050DriverTest, MaxNegativeAccelValue)
   mock.reg_values[0x3b] = 0xFF;
   mock.reg_values[0x3c] = 0xFF;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -168,7 +175,7 @@ TEST(Mpu6050DriverTest, MaxPositiveAccelValue)
   mock.reg_values[0x3b] = 0x7F;
   mock.reg_values[0x3c] = 0xFF;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -182,7 +189,7 @@ TEST(Mpu6050DriverTest, GyroScalingApplied)
   mock.reg_values[0x43] = 0x00;
   mock.reg_values[0x44] = 0x83;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -197,7 +204,7 @@ TEST(Mpu6050DriverTest, NegativeGyroScalingApplied)
   mock.reg_values[0x43] = 0xFF;
   mock.reg_values[0x44] = 0x7D;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -208,7 +215,7 @@ TEST(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
 {
   MockI2C mock;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -219,7 +226,7 @@ TEST(Mpu6050DriverTest, ImuMessageTimestampIsSet)
 {
   MockI2C mock;
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
@@ -246,7 +253,7 @@ TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
   mock.reg_values[0x47] = 0x01; mock.reg_values[0x48] = 0x89;
 
   rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>("test_node", opts, &mock);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
