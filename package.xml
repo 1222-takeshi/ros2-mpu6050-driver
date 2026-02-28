@@ -4,7 +4,7 @@
   <name>imu_driver</name>
   <version>1.0.0</version>
   <description>The ros2 mpu 6050 imu package</description>
-  <maintainer> email="m.takeshi1995@gmail.com" </maintainer>
+  <maintainer email="m.takeshi1995@gmail.com">Takeshi Miura</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
