@@ -54,7 +54,7 @@ jobs:
           colcon test \
             --packages-select imu_driver \
             --event-handlers console_cohesion+ \
-            --ctest-args "-R test_mpu6050_driver"
+            --ctest-args -R test_mpu6050_driver
           colcon test-result --verbose
 
       - name: Upload test results
