@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - uses: ros-tooling/action-ros-ci@v0.3
+        with:
+          package-name: imu_driver
+          target-ros2-distro: humble
+          colcon-defaults: |
+            {
+              "build": {
+                "cmake-args": ["-DBUILD_TESTING=ON"]
+              }
+            }
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ros_ws/build/imu_driver/test_results/
