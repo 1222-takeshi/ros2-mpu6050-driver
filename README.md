@@ -6,21 +6,17 @@ ROS2 driver for the MPU6050 IMU sensor (accelerometer + gyroscope), designed for
 
 | Component | Version |
 |-----------|---------|
-| Raspberry Pi | 3B+, 4 (build only) |
-| Ubuntu | 20.04, 22.04 (build only) |
-| ROS2 | Foxy, Humble (build only) |
+| Raspberry Pi | 3B+, 4 |
+| Ubuntu | 22.04 |
+| ROS2 | Humble |
 
 ## Prerequisites
 
 ### WiringPi
 
-Install WiringPi for I2C communication on Raspberry Pi:
+On Ubuntu 22.04, WiringPi is not available via apt and must be built from source:
 
 ```sh
-# For Raspberry Pi OS / Ubuntu on RPi
-sudo apt-get install wiringpi
-
-# If the above doesn't work (newer Pi models), build from source:
 git clone https://github.com/WiringPi/WiringPi.git
 cd WiringPi
 ./build
@@ -34,11 +30,30 @@ gpio -v
 
 ### Enable I2C
 
-Enable I2C on Raspberry Pi:
+On Ubuntu 22.04, enable I2C by editing the boot configuration directly (`raspi-config` is not available):
 
 ```sh
-sudo raspi-config
-# Navigate to: Interface Options > I2C > Enable
+sudo nano /boot/firmware/config.txt
+```
+
+Add the following line:
+
+```
+dtparam=i2c_arm=on
+```
+
+Then reboot:
+
+```sh
+sudo reboot
+```
+
+Install i2c-tools and add your user to the `i2c` group (avoids `sudo` for every command):
+
+```sh
+sudo apt install i2c-tools
+sudo usermod -aG i2c $USER
+# Log out and back in for the group change to take effect
 ```
 
 Verify the MPU6050 is detected (default address: `0x68`):
@@ -71,10 +86,6 @@ source install/setup.bash
 ## Usage
 
 ```sh
-# Grant I2C permissions (run once per boot, or configure udev rules)
-sudo chmod 666 /dev/i2c-1
-
-# Launch the driver
 ros2 launch imu_driver mpu6050_driver.launch.xml
 ```
 
