@@ -49,6 +49,8 @@ Mpu6050Driver::Mpu6050Driver(
 
   using std::chrono_literals::operator""ms;
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
+  roll_pitch_pub_ =
+    create_publisher<geometry_msgs::msg::Vector3Stamped>("roll_pitch", rclcpp::QoS{10});
   auto on_timer_ = std::bind(&Mpu6050Driver::onTimer, this);
   timer_ = std::make_shared<rclcpp::GenericTimer<decltype(on_timer_)>>(
     this->get_clock(), 100ms, std::move(on_timer_),
@@ -126,10 +128,15 @@ void Mpu6050Driver::imuDataPublish()
 
 void Mpu6050Driver::calcRollPitch()
 {
-  // TODO(user): roll/pitch are computed but not yet published.
   float roll = std::atan(accel_[1] / accel_[2]) * 57.324f;
   float pitch =
     std::atan(-accel_[0] / std::sqrt(accel_[1] * accel_[1] + accel_[2] * accel_[2])) * 57.324f;
-  (void)roll;
-  (void)pitch;
+
+  geometry_msgs::msg::Vector3Stamped msg;
+  msg.header.stamp = now();
+  msg.header.frame_id = "imu";
+  msg.vector.x = roll;
+  msg.vector.y = pitch;
+  msg.vector.z = 0.0f;
+  roll_pitch_pub_->publish(msg);
 }

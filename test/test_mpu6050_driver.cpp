@@ -18,6 +18,7 @@
 #include "imu_driver/mpu6050_driver.hpp"
 
 #include <rclcpp/rclcpp.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
 #include <chrono>
@@ -63,6 +64,25 @@ static sensor_msgs::msg::Imu::SharedPtr spinAndCapture(
   auto sub = node->create_subscription<sensor_msgs::msg::Imu>(
     "output", rclcpp::QoS{10},
     [&received](sensor_msgs::msg::Imu::SharedPtr msg) {
+      received = msg;
+    });
+
+  auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (!received && std::chrono::steady_clock::now() < deadline) {
+    rclcpp::spin_some(node);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return received;
+}
+
+static geometry_msgs::msg::Vector3Stamped::SharedPtr spinAndCaptureRollPitch(
+  std::shared_ptr<Mpu6050Driver> node,
+  std::chrono::milliseconds timeout = std::chrono::milliseconds(1000))
+{
+  geometry_msgs::msg::Vector3Stamped::SharedPtr received;
+  auto sub = node->create_subscription<geometry_msgs::msg::Vector3Stamped>(
+    "roll_pitch", rclcpp::QoS{10},
+    [&received](geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
       received = msg;
     });
 
@@ -263,6 +283,42 @@ TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
   EXPECT_NEAR(msg->angular_velocity.x,    1.0f,     1e-4f);
   EXPECT_NEAR(msg->angular_velocity.y,    2.0f,     1e-4f);
   EXPECT_NEAR(msg->angular_velocity.z,    3.0f,     1e-4f);
+}
+
+TEST(Mpu6050DriverTest, RollPitchZeroWhenFlat)
+{
+  // Flat orientation: accel_x = 0, accel_y = 0, accel_z = 1g (raw 0x4000 = 16384).
+  // Expected: roll = atan(0/1) * 57.324 = 0, pitch = atan(0/1) * 57.324 = 0.
+  MockI2C mock;
+  mock.reg_values[0x3f] = 0x40;  // ACCEL_Z high byte => 16384 / 16384 = 1.0 g
+  mock.reg_values[0x40] = 0x00;  // ACCEL_Z low byte
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCaptureRollPitch(node);
+  ASSERT_NE(msg, nullptr) << "Expected a roll_pitch message to be published";
+  EXPECT_NEAR(msg->vector.x, 0.0f, 0.01f) << "Roll must be 0 when flat";
+  EXPECT_NEAR(msg->vector.y, 0.0f, 0.01f) << "Pitch must be 0 when flat";
+  EXPECT_EQ(msg->header.frame_id, "imu");
+}
+
+TEST(Mpu6050DriverTest, RollFortyFiveDegrees)
+{
+  // accel_x = 0, accel_y = 1g, accel_z = 1g => roll = atan(1) * 57.324 ≈ 45.024°.
+  // raw 1g = 16384 = 0x4000, high byte = 0x40, low byte = 0x00.
+  MockI2C mock;
+  mock.reg_values[0x3d] = 0x40;  // ACCEL_Y high byte
+  mock.reg_values[0x3e] = 0x00;  // ACCEL_Y low byte
+  mock.reg_values[0x3f] = 0x40;  // ACCEL_Z high byte
+  mock.reg_values[0x40] = 0x00;  // ACCEL_Z low byte
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  const float expected_roll = std::atan(1.0f) * 57.324f;
+  auto msg = spinAndCaptureRollPitch(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_NEAR(msg->vector.x, expected_roll, 0.01f) << "Roll must be ~45° when accel_y == accel_z";
+  EXPECT_NEAR(msg->vector.y, 0.0f, 0.01f) << "Pitch must be 0 when accel_x == 0";
 }
 
 // ---------------------------------------------------------------------------

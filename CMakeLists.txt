@@ -48,7 +48,7 @@ if(BUILD_TESTING)
     ${CMAKE_CURRENT_SOURCE_DIR}/include
   )
   target_link_libraries(test_mpu6050_driver mpu6050_driver_lib)
-  ament_target_dependencies(test_mpu6050_driver rclcpp sensor_msgs)
+  ament_target_dependencies(test_mpu6050_driver rclcpp sensor_msgs geometry_msgs)
 endif()
 
 ament_auto_package(
