@@ -25,14 +25,21 @@
 #define ACCEL_X_OUT 0x3b
 #define ACCEL_Y_OUT 0x3d
 #define ACCEL_Z_OUT 0x3f
-#define TEMP_OUT    0x41
+#define TEMP_OUT    0x41  // Built-in temperature sensor (for diagnostics: thermal monitoring)
 #define GYRO_X_OUT  0x43
 #define GYRO_Y_OUT  0x45
 #define GYRO_Z_OUT  0x47
 
 #define PWR_MGMT_1 0x6B
-#define PWR_MGMT_2 0x6C
+#define PWR_MGMT_2 0x6C  // Axis standby flags: bits[5:3]=gyro XYZ, bits[2:0]=accel XYZ (for diagnostics)
 #define DEV_ADDR   0x68
+
+// MPU6050 sensitivity: ±250°/s range → 131 LSB/(°/s)
+static constexpr float GYRO_SENSITIVITY_LSB = 131.0f;
+// MPU6050 sensitivity: ±2g range → 16384 LSB/g
+static constexpr float ACCEL_SENSITIVITY_LSB = 16384.0f;
+// Radians to degrees conversion factor
+static constexpr float RAD_TO_DEG = 180.0f / M_PI;
 
 Mpu6050Driver::Mpu6050Driver(
   const std::string & node_name,
@@ -83,16 +90,16 @@ void Mpu6050Driver::onTimer()
 
 void Mpu6050Driver::updateCurrentGyroData()
 {
-  gyro_.push_back(get2data(fd_, GYRO_X_OUT) / 131.0f);
-  gyro_.push_back(get2data(fd_, GYRO_Y_OUT) / 131.0f);
-  gyro_.push_back(get2data(fd_, GYRO_Z_OUT) / 131.0f);
+  gyro_.push_back(get2data(fd_, GYRO_X_OUT) / GYRO_SENSITIVITY_LSB);
+  gyro_.push_back(get2data(fd_, GYRO_Y_OUT) / GYRO_SENSITIVITY_LSB);
+  gyro_.push_back(get2data(fd_, GYRO_Z_OUT) / GYRO_SENSITIVITY_LSB);
 }
 
 void Mpu6050Driver::updateCurrentAccelData()
 {
-  accel_.push_back(get2data(fd_, ACCEL_X_OUT) / 16384.0f);
-  accel_.push_back(get2data(fd_, ACCEL_Y_OUT) / 16384.0f);
-  accel_.push_back(get2data(fd_, ACCEL_Z_OUT) / 16384.0f);
+  accel_.push_back(get2data(fd_, ACCEL_X_OUT) / ACCEL_SENSITIVITY_LSB);
+  accel_.push_back(get2data(fd_, ACCEL_Y_OUT) / ACCEL_SENSITIVITY_LSB);
+  accel_.push_back(get2data(fd_, ACCEL_Z_OUT) / ACCEL_SENSITIVITY_LSB);
 }
 
 float Mpu6050Driver::get2data(int fd, unsigned int reg)
@@ -126,10 +133,9 @@ void Mpu6050Driver::imuDataPublish()
 
 void Mpu6050Driver::calcRollPitch()
 {
-  // TODO(user): roll/pitch are computed but not yet published.
-  float roll = std::atan(accel_[1] / accel_[2]) * 57.324f;
+  float roll = std::atan(accel_[1] / accel_[2]) * RAD_TO_DEG;
   float pitch =
-    std::atan(-accel_[0] / std::sqrt(accel_[1] * accel_[1] + accel_[2] * accel_[2])) * 57.324f;
+    std::atan(-accel_[0] / std::sqrt(accel_[1] * accel_[1] + accel_[2] * accel_[2])) * RAD_TO_DEG;
   (void)roll;
   (void)pitch;
 }
