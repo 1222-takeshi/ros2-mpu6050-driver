@@ -54,11 +54,14 @@ Mpu6050Driver::Mpu6050Driver(
     i2c_ = i2c;
   }
 
-  using std::chrono_literals::operator""ms;
+  declare_parameter<double>("publish_rate_hz", 100.0);
+  const double rate_hz = get_parameter("publish_rate_hz").as_double();
+  const auto period_ms = static_cast<int64_t>(1000.0 / rate_hz);
+
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
   auto on_timer_ = std::bind(&Mpu6050Driver::onTimer, this);
   timer_ = std::make_shared<rclcpp::GenericTimer<decltype(on_timer_)>>(
-    this->get_clock(), 100ms, std::move(on_timer_),
+    this->get_clock(), std::chrono::milliseconds(period_ms), std::move(on_timer_),
     this->get_node_base_interface()->get_context());
   this->get_node_timers_interface()->add_timer(timer_, nullptr);
 

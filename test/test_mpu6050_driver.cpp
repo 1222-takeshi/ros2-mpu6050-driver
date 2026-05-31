@@ -52,7 +52,7 @@ public:
 
 // ---------------------------------------------------------------------------
 // Helper: spin the node until a message arrives or timeout elapses.
-// The driver timer fires every 100 ms; we wait up to 1 s.
+// The driver timer fires at publish_rate_hz (default 100 Hz = 10 ms); we wait up to 1 s.
 // ---------------------------------------------------------------------------
 
 static sensor_msgs::msg::Imu::SharedPtr spinAndCapture(
