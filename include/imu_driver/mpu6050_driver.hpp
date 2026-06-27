@@ -17,6 +17,7 @@
 
 #include "imu_driver/i2c_interface.hpp"
 
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -44,6 +45,7 @@ private:
   float get2data(int fd, unsigned int reg);
 
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr roll_pitch_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::vector<float> gyro_;
   std::vector<float> accel_;
