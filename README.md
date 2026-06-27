@@ -89,11 +89,25 @@ source install/setup.bash
 ros2 launch imu_driver mpu6050_driver.launch.xml
 ```
 
+The publish rate is controlled by the `publish_rate_hz` parameter. The default is `100.0` Hz.
+
+Example override:
+
+```sh
+ros2 launch imu_driver mpu6050_driver.launch.xml publish_rate_hz:=200.0
+```
+
 ### Published Topics
 
 | Topic | Type | Description |
 |-------|------|-------------|
 | `output` | `sensor_msgs/Imu` | Raw IMU data (angular velocity + linear acceleration) |
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `publish_rate_hz` | double | `100.0` | IMU publish rate in Hz |
 
 ### Sensor Configuration
 
@@ -103,7 +117,7 @@ The driver uses the following MPU6050 default settings:
 |-----------|-------|
 | Gyroscope range | ±250°/s |
 | Accelerometer range | ±2g |
-| Output rate | 10 Hz |
+| Output rate | 100 Hz by default (`publish_rate_hz`) |
 | I2C address | 0x68 |
 
 ## References
