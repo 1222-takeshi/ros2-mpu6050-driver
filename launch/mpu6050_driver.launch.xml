@@ -1,8 +1,10 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="output_imu_name" default="/imu/data_raw" description="output imu raw data" />
+  <arg name="publish_rate_hz" default="100.0" description="IMU publish rate in Hz" />
 
   <node name="imu_driver" pkg="imu_driver" exec="imu_driver">
+    <param name="publish_rate_hz" value="$(var publish_rate_hz)" />
     <remap from="output" to="$(var output_imu_name)"/>
   </node>
 </launch>
