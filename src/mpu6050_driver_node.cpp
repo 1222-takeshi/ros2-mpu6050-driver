@@ -18,6 +18,7 @@
 #include <rclcpp/timer.hpp>
 
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -40,6 +41,8 @@ static constexpr float GYRO_SENSITIVITY_LSB = 131.0f;
 static constexpr float ACCEL_SENSITIVITY_LSB = 16384.0f;
 // Radians to degrees conversion factor
 static constexpr float RAD_TO_DEG = 180.0f / M_PI;
+static constexpr double DEFAULT_PUBLISH_RATE_HZ = 100.0;
+static constexpr int64_t MIN_TIMER_PERIOD_MS = 1;
 
 Mpu6050Driver::Mpu6050Driver(
   const std::string & node_name,
@@ -54,9 +57,21 @@ Mpu6050Driver::Mpu6050Driver(
     i2c_ = i2c;
   }
 
-  declare_parameter<double>("publish_rate_hz", 100.0);
-  const double rate_hz = get_parameter("publish_rate_hz").as_double();
-  const auto period_ms = static_cast<int64_t>(1000.0 / rate_hz);
+  declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ);
+  double rate_hz = get_parameter("publish_rate_hz").as_double();
+  if (!std::isfinite(rate_hz) || rate_hz <= 0.0) {
+    RCLCPP_ERROR(
+      get_logger(), "Invalid publish_rate_hz %.3f; falling back to %.1f Hz", rate_hz,
+      DEFAULT_PUBLISH_RATE_HZ);
+    rate_hz = DEFAULT_PUBLISH_RATE_HZ;
+  }
+
+  auto period_ms = static_cast<int64_t>(1000.0 / rate_hz);
+  if (period_ms < MIN_TIMER_PERIOD_MS) {
+    RCLCPP_WARN(
+      get_logger(), "publish_rate_hz %.3f is above timer resolution; using 1 ms period", rate_hz);
+    period_ms = MIN_TIMER_PERIOD_MS;
+  }
 
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
   auto on_timer_ = std::bind(&Mpu6050Driver::onTimer, this);
