@@ -108,16 +108,20 @@ void Mpu6050Driver::onTimer()
 
 void Mpu6050Driver::updateCurrentGyroData()
 {
-  gyro_.push_back(get2data(fd_, GYRO_X_OUT) / GYRO_SENSITIVITY_LSB);
-  gyro_.push_back(get2data(fd_, GYRO_Y_OUT) / GYRO_SENSITIVITY_LSB);
-  gyro_.push_back(get2data(fd_, GYRO_Z_OUT) / GYRO_SENSITIVITY_LSB);
+  gyro_ = {{
+    get2data(fd_, GYRO_X_OUT) / GYRO_SENSITIVITY_LSB,
+    get2data(fd_, GYRO_Y_OUT) / GYRO_SENSITIVITY_LSB,
+    get2data(fd_, GYRO_Z_OUT) / GYRO_SENSITIVITY_LSB,
+  }};
 }
 
 void Mpu6050Driver::updateCurrentAccelData()
 {
-  accel_.push_back(get2data(fd_, ACCEL_X_OUT) / ACCEL_SENSITIVITY_LSB);
-  accel_.push_back(get2data(fd_, ACCEL_Y_OUT) / ACCEL_SENSITIVITY_LSB);
-  accel_.push_back(get2data(fd_, ACCEL_Z_OUT) / ACCEL_SENSITIVITY_LSB);
+  accel_ = {{
+    get2data(fd_, ACCEL_X_OUT) / ACCEL_SENSITIVITY_LSB,
+    get2data(fd_, ACCEL_Y_OUT) / ACCEL_SENSITIVITY_LSB,
+    get2data(fd_, ACCEL_Z_OUT) / ACCEL_SENSITIVITY_LSB,
+  }};
 }
 
 float Mpu6050Driver::get2data(int fd, unsigned int reg)
@@ -145,8 +149,6 @@ void Mpu6050Driver::imuDataPublish()
   msg.linear_acceleration.y = accel_[1];
   msg.linear_acceleration.z = accel_[2];
   imu_pub_->publish(msg);
-  gyro_.clear();
-  accel_.clear();
 }
 
 void Mpu6050Driver::calcRollPitch()
