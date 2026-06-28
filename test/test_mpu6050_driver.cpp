@@ -107,6 +107,13 @@ static std::string testNodeName()
   return std::string("test_") + info->test_suite_name() + "_" + info->name();
 }
 
+static rclcpp::NodeOptions optionsWithPublishRate(double rate_hz)
+{
+  rclcpp::NodeOptions opts;
+  opts.parameter_overrides({rclcpp::Parameter("publish_rate_hz", rate_hz)});
+  return opts;
+}
+
 TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
 {
   // PWR_MGMT_1 (0x6B) must be written with 0x00 to wake MPU6050 from sleep.
@@ -143,6 +150,38 @@ TEST(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
 
   EXPECT_EQ(mock.written_regs.count(0x6B), 0u)
     << "PWR_MGMT_1 must not be written when I2C setup failed";
+}
+
+TEST(Mpu6050DriverTest, FallsBackToDefaultPublishRateWhenZero)
+{
+  MockI2C mock;
+  auto opts = optionsWithPublishRate(0.0);
+  std::shared_ptr<Mpu6050Driver> node;
+
+  ASSERT_NO_THROW({node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);});
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr) << "Invalid publish_rate_hz must fall back and still publish";
+}
+
+TEST(Mpu6050DriverTest, FallsBackToDefaultPublishRateWhenNegative)
+{
+  MockI2C mock;
+  auto opts = optionsWithPublishRate(-10.0);
+  std::shared_ptr<Mpu6050Driver> node;
+
+  ASSERT_NO_THROW({node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);});
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr) << "Negative publish_rate_hz must fall back and still publish";
+}
+
+TEST(Mpu6050DriverTest, AcceptsPositivePublishRateOverride)
+{
+  MockI2C mock;
+  auto opts = optionsWithPublishRate(200.0);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr) << "Positive publish_rate_hz override must keep publishing";
 }
 
 TEST(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)

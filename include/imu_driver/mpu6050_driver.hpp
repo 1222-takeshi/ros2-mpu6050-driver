@@ -21,9 +21,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+#include <array>
 #include <memory>
 #include <string>
-#include <vector>
 
 class Mpu6050Driver : public rclcpp::Node
 {
@@ -47,8 +47,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr roll_pitch_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  std::vector<float> gyro_;
-  std::vector<float> accel_;
+  std::array<float, 3> gyro_{};
+  std::array<float, 3> accel_{};
 
   std::unique_ptr<II2CInterface> owned_i2c_;  ///< Owns the instance when created internally.
   II2CInterface * i2c_;                        ///< Non-owning pointer used for all I2C calls.
