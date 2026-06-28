@@ -17,11 +17,14 @@
 #include "imu_driver/i2c_interface.hpp"
 #include "imu_driver/mpu6050_driver.hpp"
 
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
 #include <chrono>
 #include <map>
+#include <string>
 #include <thread>
 
 // ---------------------------------------------------------------------------
@@ -72,6 +75,33 @@ static sensor_msgs::msg::Imu::SharedPtr spinAndCapture(
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   return received;
+}
+
+static bool spinAndCaptureDiagnosticStatus(
+  std::shared_ptr<Mpu6050Driver> node,
+  const std::string & status_name,
+  diagnostic_msgs::msg::DiagnosticStatus * received,
+  std::chrono::milliseconds timeout = std::chrono::milliseconds(2500))
+{
+  bool found = false;
+  auto sub = node->create_subscription<diagnostic_msgs::msg::DiagnosticArray>(
+    "/diagnostics", rclcpp::QoS{10},
+    [&found, &received, &status_name](diagnostic_msgs::msg::DiagnosticArray::SharedPtr msg) {
+      for (const auto & status : msg->status) {
+        if (status.name.find(status_name) != std::string::npos) {
+          *received = status;
+          found = true;
+          return;
+        }
+      }
+    });
+
+  auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (!found && std::chrono::steady_clock::now() < deadline) {
+    rclcpp::spin_some(node);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return found;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +159,63 @@ TEST(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
 
   EXPECT_EQ(mock.written_regs.count(0x6B), 0u)
     << "PWR_MGMT_1 must not be written when I2C setup failed";
+}
+
+TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticOk)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
+    << "Expected a hardware diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::OK);
+  EXPECT_EQ(status.hardware_id, "MPU6050");
+}
+
+TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticErrorWhenI2CSetupFails)
+{
+  MockI2C mock;
+  mock.setup_return_value = -1;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
+    << "Expected a hardware diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
+  EXPECT_EQ(status.message, "I2C not initialized");
+}
+
+TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticWarnWhenAxisInStandby)
+{
+  MockI2C mock;
+  mock.reg_values[0x6C] = 0x01;  // PWR_MGMT_2: accel Z standby bit set
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
+    << "Expected a hardware diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::WARN);
+  EXPECT_EQ(status.message, "Sensor degraded");
+}
+
+TEST(Mpu6050DriverTest, PublishesDataDiagnosticOkAfterSample)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto imu_msg = spinAndCapture(node);
+  ASSERT_NE(imu_msg, nullptr);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status))
+    << "Expected a data diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::OK);
+  EXPECT_EQ(status.message, "Data OK");
 }
 
 TEST(Mpu6050DriverTest, FallsBackToDefaultPublishRateWhenZero)

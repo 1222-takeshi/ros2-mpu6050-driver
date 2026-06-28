@@ -15,6 +15,7 @@
 #include "imu_driver/mpu6050_driver.hpp"
 #include "imu_driver/wiringpi_i2c.hpp"
 
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <rclcpp/timer.hpp>
 
 #include <cmath>
@@ -43,12 +44,18 @@ static constexpr float ACCEL_SENSITIVITY_LSB = 16384.0f;
 static constexpr float RAD_TO_DEG = 180.0f / M_PI;
 static constexpr double DEFAULT_PUBLISH_RATE_HZ = 100.0;
 static constexpr int64_t MIN_TIMER_PERIOD_MS = 1;
+static constexpr float TEMP_WARN_C = 70.0f;
+static constexpr float TEMP_ERROR_C = 85.0f;
+static constexpr float MAX_ACCEL_G = 2.5f;
+static constexpr float MAX_GYRO_DPS = 260.0f;
+static constexpr double STALE_SAMPLE_PERIOD_MULTIPLIER = 3.0;
 
 Mpu6050Driver::Mpu6050Driver(
   const std::string & node_name,
   const rclcpp::NodeOptions & node_options,
   II2CInterface * i2c)
-: rclcpp::Node(node_name, node_options)
+: rclcpp::Node(node_name, node_options),
+  diagnostic_updater_(this)
 {
   if (i2c == nullptr) {
     owned_i2c_ = std::make_unique<WiringPiI2C>();
@@ -72,6 +79,7 @@ Mpu6050Driver::Mpu6050Driver(
       get_logger(), "publish_rate_hz %.3f is above timer resolution; using 1 ms period", rate_hz);
     period_ms = MIN_TIMER_PERIOD_MS;
   }
+  publish_rate_hz_ = rate_hz;
 
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
   auto on_timer_ = std::bind(&Mpu6050Driver::onTimer, this);
@@ -79,6 +87,10 @@ Mpu6050Driver::Mpu6050Driver(
     this->get_clock(), std::chrono::milliseconds(period_ms), std::move(on_timer_),
     this->get_node_base_interface()->get_context());
   this->get_node_timers_interface()->add_timer(timer_, nullptr);
+
+  diagnostic_updater_.setHardwareID("MPU6050");
+  diagnostic_updater_.add("Hardware Status", this, &Mpu6050Driver::checkHardwareStatus);
+  diagnostic_updater_.add("Data Status", this, &Mpu6050Driver::checkDataStatus);
 
   initializeI2C();
 }
@@ -140,7 +152,11 @@ float Mpu6050Driver::get2data(int fd, unsigned int reg)
 void Mpu6050Driver::imuDataPublish()
 {
   sensor_msgs::msg::Imu msg;
-  msg.header.stamp = now();
+  last_sample_time_ = now();
+  latest_sample_valid_ = isLatestSampleValid();
+  ++sample_count_;
+
+  msg.header.stamp = last_sample_time_;
   msg.header.frame_id = "imu";
   msg.angular_velocity.x = gyro_[0];
   msg.angular_velocity.y = gyro_[1];
@@ -158,4 +174,79 @@ void Mpu6050Driver::calcRollPitch()
     std::atan(-accel_[0] / std::sqrt(accel_[1] * accel_[1] + accel_[2] * accel_[2])) * RAD_TO_DEG;
   (void)roll;
   (void)pitch;
+}
+
+void Mpu6050Driver::checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrapper & stat)
+{
+  using diagnostic_msgs::msg::DiagnosticStatus;
+
+  stat.add("I2C connection", fd_ == -1 ? "not initialized" : "ok");
+  stat.add("Gyro sensitivity", "131 LSB/(deg/s) [+-250 deg/s]");
+  stat.add("Accel sensitivity", "16384 LSB/g [+-2g]");
+
+  if (fd_ == -1) {
+    stat.summary(DiagnosticStatus::ERROR, "I2C not initialized");
+    return;
+  }
+
+  const float temp_c = get2data(fd_, TEMP_OUT) / 340.0f + 36.53f;
+  const int pwr_mgmt_2 = i2c_->readReg8(fd_, PWR_MGMT_2);
+  const bool all_axes_active = (pwr_mgmt_2 & 0x3F) == 0x00;
+
+  stat.add("Chip temperature C", temp_c);
+  stat.add("PWR_MGMT_2", pwr_mgmt_2);
+  stat.add("Axis power state", all_axes_active ? "all active" : "some axes in standby");
+
+  if (temp_c > TEMP_ERROR_C) {
+    stat.summary(DiagnosticStatus::ERROR, "Chip overheating");
+  } else if (temp_c > TEMP_WARN_C || !all_axes_active) {
+    stat.summary(DiagnosticStatus::WARN, "Sensor degraded");
+  } else {
+    stat.summary(DiagnosticStatus::OK, "Hardware OK");
+  }
+}
+
+void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper & stat)
+{
+  using diagnostic_msgs::msg::DiagnosticStatus;
+
+  stat.add("Configured publish_rate_hz", publish_rate_hz_);
+  stat.add("Published samples", sample_count_);
+
+  if (fd_ == -1) {
+    stat.summary(DiagnosticStatus::ERROR, "I2C not initialized");
+    return;
+  }
+  if (sample_count_ == 0) {
+    stat.summary(DiagnosticStatus::WARN, "No IMU samples published yet");
+    return;
+  }
+
+  const double sample_age_s = (now() - last_sample_time_).seconds();
+  const double expected_period_s = 1.0 / publish_rate_hz_;
+  stat.add("Latest sample age sec", sample_age_s);
+  stat.add("Latest sample valid", latest_sample_valid_);
+
+  if (!latest_sample_valid_) {
+    stat.summary(DiagnosticStatus::WARN, "Latest IMU sample outside expected range");
+  } else if (sample_age_s > expected_period_s * STALE_SAMPLE_PERIOD_MULTIPLIER) {
+    stat.summary(DiagnosticStatus::WARN, "No recent IMU sample");
+  } else {
+    stat.summary(DiagnosticStatus::OK, "Data OK");
+  }
+}
+
+bool Mpu6050Driver::isLatestSampleValid() const
+{
+  for (const auto value : accel_) {
+    if (!std::isfinite(value) || std::fabs(value) > MAX_ACCEL_G) {
+      return false;
+    }
+  }
+  for (const auto value : gyro_) {
+    if (!std::isfinite(value) || std::fabs(value) > MAX_GYRO_DPS) {
+      return false;
+    }
+  }
+  return true;
 }

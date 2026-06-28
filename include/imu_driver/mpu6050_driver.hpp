@@ -17,10 +17,12 @@
 
 #include "imu_driver/i2c_interface.hpp"
 
+#include <diagnostic_updater/diagnostic_updater.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
 #include <array>
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -41,12 +43,20 @@ private:
   void updateCurrentAccelData();
   void calcRollPitch();
   void imuDataPublish();
+  void checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
+  void checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
+  bool isLatestSampleValid() const;
   float get2data(int fd, unsigned int reg);
 
+  diagnostic_updater::Updater diagnostic_updater_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::array<float, 3> gyro_{};
   std::array<float, 3> accel_{};
+  rclcpp::Time last_sample_time_;
+  double publish_rate_hz_ = 0.0;
+  std::size_t sample_count_ = 0;
+  bool latest_sample_valid_ = false;
 
   std::unique_ptr<II2CInterface> owned_i2c_;  ///< Owns the instance when created internally.
   II2CInterface * i2c_;                        ///< Non-owning pointer used for all I2C calls.
