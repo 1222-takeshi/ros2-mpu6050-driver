@@ -18,6 +18,7 @@
 #include "imu_driver/i2c_interface.hpp"
 
 #include <diagnostic_updater/diagnostic_updater.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
@@ -50,6 +51,7 @@ private:
 
   diagnostic_updater::Updater diagnostic_updater_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr roll_pitch_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::array<float, 3> gyro_{};
   std::array<float, 3> accel_{};

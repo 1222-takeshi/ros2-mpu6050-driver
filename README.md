@@ -102,6 +102,7 @@ ros2 launch imu_driver mpu6050_driver.launch.xml publish_rate_hz:=200.0
 | Topic | Type | Description |
 |-------|------|-------------|
 | `output` | `sensor_msgs/Imu` | Raw IMU data (angular velocity + linear acceleration) |
+| `roll_pitch` | `geometry_msgs/Vector3Stamped` | Roll and pitch angles in degrees (`x=roll`, `y=pitch`, `z=0`) |
 
 ### Parameters
 
