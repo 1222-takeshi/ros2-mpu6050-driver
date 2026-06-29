@@ -162,6 +162,18 @@ static rclcpp::NodeOptions optionsWithCovariances(
   return opts;
 }
 
+static rclcpp::NodeOptions optionsWithBiases(
+  const std::vector<double> & angular_velocity_bias,
+  const std::vector<double> & linear_acceleration_bias)
+{
+  rclcpp::NodeOptions opts;
+  opts.parameter_overrides({
+    rclcpp::Parameter("angular_velocity_bias", angular_velocity_bias),
+    rclcpp::Parameter("linear_acceleration_bias", linear_acceleration_bias),
+  });
+  return opts;
+}
+
 template<typename Covariance>
 static void expectCovarianceEquals(
   const Covariance & actual,
@@ -472,6 +484,104 @@ TEST(Mpu6050DriverTest, NegativeGyroScalingApplied)
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
   EXPECT_NEAR(msg->angular_velocity.x, -1.0f * DEG_TO_RAD, 1e-4f);
+}
+
+TEST(Mpu6050DriverTest, DefaultBiasOffsetsPreservePublishedImuValues)
+{
+  MockI2C mock;
+  // Accel X/Y/Z: 0.25g, 0.5g, 1.0g.
+  mock.reg_values[0x3b] = 0x10; mock.reg_values[0x3c] = 0x00;
+  mock.reg_values[0x3d] = 0x20; mock.reg_values[0x3e] = 0x00;
+  mock.reg_values[0x3f] = 0x40; mock.reg_values[0x40] = 0x00;
+  // Gyro X/Y/Z: 1, 2, 3 deg/s.
+  mock.reg_values[0x43] = 0x00; mock.reg_values[0x44] = 0x83;
+  mock.reg_values[0x45] = 0x01; mock.reg_values[0x46] = 0x06;
+  mock.reg_values[0x47] = 0x01; mock.reg_values[0x48] = 0x89;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_NEAR(msg->linear_acceleration.x, 0.25f * STANDARD_GRAVITY, 1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.y, 0.5f * STANDARD_GRAVITY, 1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.z, 1.0f * STANDARD_GRAVITY, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.x, 1.0f * DEG_TO_RAD, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.y, 2.0f * DEG_TO_RAD, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.z, 3.0f * DEG_TO_RAD, 1e-4f);
+}
+
+TEST(Mpu6050DriverTest, AngularVelocityBiasOffsetsAreSubtracted)
+{
+  MockI2C mock;
+  // Gyro X/Y/Z: 1, 2, -1 deg/s.
+  mock.reg_values[0x43] = 0x00; mock.reg_values[0x44] = 0x83;
+  mock.reg_values[0x45] = 0x01; mock.reg_values[0x46] = 0x06;
+  mock.reg_values[0x47] = 0xFF; mock.reg_values[0x48] = 0x7D;
+  auto opts = optionsWithBiases(
+    {0.001, -0.002, 0.003},
+    {0.0, 0.0, 0.0});
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_NEAR(msg->angular_velocity.x, 1.0 * DEG_TO_RAD - 0.001, 1e-6);
+  EXPECT_NEAR(msg->angular_velocity.y, 2.0 * DEG_TO_RAD + 0.002, 1e-6);
+  EXPECT_NEAR(msg->angular_velocity.z, -1.0 * DEG_TO_RAD - 0.003, 1e-6);
+}
+
+TEST(Mpu6050DriverTest, LinearAccelerationBiasOffsetsAreSubtracted)
+{
+  MockI2C mock;
+  // Accel X/Y/Z: 0.25g, -0.25g, 1.0g.
+  mock.reg_values[0x3b] = 0x10; mock.reg_values[0x3c] = 0x00;
+  mock.reg_values[0x3d] = 0xF0; mock.reg_values[0x3e] = 0x00;
+  mock.reg_values[0x3f] = 0x40; mock.reg_values[0x40] = 0x00;
+  auto opts = optionsWithBiases(
+    {0.0, 0.0, 0.0},
+    {0.10, -0.20, 0.30});
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_NEAR(msg->linear_acceleration.x, 0.25 * STANDARD_GRAVITY - 0.10, 1e-5);
+  EXPECT_NEAR(msg->linear_acceleration.y, -0.25 * STANDARD_GRAVITY + 0.20, 1e-5);
+  EXPECT_NEAR(msg->linear_acceleration.z, 1.0 * STANDARD_GRAVITY - 0.30, 1e-5);
+}
+
+TEST(Mpu6050DriverTest, BiasOffsetsFallBackWhenSizeIsInvalid)
+{
+  MockI2C mock;
+  // Gyro X: 1 deg/s.
+  mock.reg_values[0x43] = 0x00; mock.reg_values[0x44] = 0x83;
+  // Accel X: 0.25g.
+  mock.reg_values[0x3b] = 0x10; mock.reg_values[0x3c] = 0x00;
+  auto opts = optionsWithBiases(
+    {0.010},
+    {0.10, 0.0, 0.0});
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_NEAR(msg->angular_velocity.x, 1.0 * DEG_TO_RAD, 1e-6);
+  EXPECT_NEAR(msg->linear_acceleration.x, 0.25 * STANDARD_GRAVITY - 0.10, 1e-5);
+}
+
+TEST(Mpu6050DriverTest, BiasOffsetsFallBackWhenValueIsNonFinite)
+{
+  MockI2C mock;
+  // Gyro X: 1 deg/s.
+  mock.reg_values[0x43] = 0x00; mock.reg_values[0x44] = 0x83;
+  // Accel X: 0.25g.
+  mock.reg_values[0x3b] = 0x10; mock.reg_values[0x3c] = 0x00;
+  auto opts = optionsWithBiases(
+    {0.010, 0.0, 0.0},
+    {std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0});
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_NEAR(msg->angular_velocity.x, 1.0 * DEG_TO_RAD - 0.010, 1e-6);
+  EXPECT_NEAR(msg->linear_acceleration.x, 0.25 * STANDARD_GRAVITY, 1e-5);
 }
 
 TEST(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)

@@ -59,6 +59,7 @@ static constexpr std::array<double, 9> ORIENTATION_NOT_ESTIMATED_COVARIANCE{
   0.0, 0.0, 0.0,
   0.0, 0.0, 0.0,
 };
+static const std::vector<double> DEFAULT_BIAS(3, 0.0);
 static const std::vector<double> DEFAULT_MEASUREMENT_COVARIANCE(9, 0.0);
 
 Mpu6050Driver::Mpu6050Driver(
@@ -76,11 +77,18 @@ Mpu6050Driver::Mpu6050Driver(
   }
 
   declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ);
+  const auto angular_velocity_bias = declare_parameter<std::vector<double>>(
+    "angular_velocity_bias", DEFAULT_BIAS);
+  const auto linear_acceleration_bias = declare_parameter<std::vector<double>>(
+    "linear_acceleration_bias", DEFAULT_BIAS);
   const auto angular_velocity_covariance = declare_parameter<std::vector<double>>(
     "angular_velocity_covariance", DEFAULT_MEASUREMENT_COVARIANCE);
   const auto linear_acceleration_covariance = declare_parameter<std::vector<double>>(
     "linear_acceleration_covariance", DEFAULT_MEASUREMENT_COVARIANCE);
 
+  angular_velocity_bias_ = parseBiasParameter("angular_velocity_bias", angular_velocity_bias);
+  linear_acceleration_bias_ = parseBiasParameter(
+    "linear_acceleration_bias", linear_acceleration_bias);
   angular_velocity_covariance_ = parseCovarianceParameter(
     "angular_velocity_covariance", angular_velocity_covariance);
   linear_acceleration_covariance_ = parseCovarianceParameter(
@@ -157,9 +165,9 @@ bool Mpu6050Driver::updateCurrentGyroData()
     return false;
   }
   gyro_ = {{
-    gyro_x / GYRO_SENSITIVITY_LSB * DEG_TO_RAD,
-    gyro_y / GYRO_SENSITIVITY_LSB * DEG_TO_RAD,
-    gyro_z / GYRO_SENSITIVITY_LSB * DEG_TO_RAD,
+    gyro_x / GYRO_SENSITIVITY_LSB * DEG_TO_RAD - angular_velocity_bias_[0],
+    gyro_y / GYRO_SENSITIVITY_LSB * DEG_TO_RAD - angular_velocity_bias_[1],
+    gyro_z / GYRO_SENSITIVITY_LSB * DEG_TO_RAD - angular_velocity_bias_[2],
   }};
   return true;
 }
@@ -177,9 +185,9 @@ bool Mpu6050Driver::updateCurrentAccelData()
     return false;
   }
   accel_ = {{
-    accel_x / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY,
-    accel_y / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY,
-    accel_z / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY,
+    accel_x / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY - linear_acceleration_bias_[0],
+    accel_y / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY - linear_acceleration_bias_[1],
+    accel_z / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY - linear_acceleration_bias_[2],
   }};
   return true;
 }
@@ -331,6 +339,33 @@ bool Mpu6050Driver::isLatestSampleValid() const
     }
   }
   return true;
+}
+
+std::array<double, 3> Mpu6050Driver::parseBiasParameter(
+  const std::string & parameter_name,
+  const std::vector<double> & values) const
+{
+  std::array<double, 3> bias{};
+  if (values.size() != bias.size()) {
+    RCLCPP_ERROR(
+      get_logger(), "Invalid %s size %zu; expected 3 values. Falling back to zero bias.",
+      parameter_name.c_str(), values.size());
+    return {};
+  }
+
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (!std::isfinite(values[i])) {
+      RCLCPP_ERROR(
+        get_logger(),
+        "Invalid %s value at index %zu; bias values must be finite. "
+        "Falling back to zero bias.",
+        parameter_name.c_str(), i);
+      return {};
+    }
+    bias[i] = values[i];
+  }
+
+  return bias;
 }
 
 std::array<double, 9> Mpu6050Driver::parseCovarianceParameter(

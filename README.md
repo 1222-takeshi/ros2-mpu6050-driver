@@ -142,8 +142,28 @@ ros2 topic echo /diagnostics
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `publish_rate_hz` | double | `100.0` | IMU publish rate in Hz |
+| `angular_velocity_bias` | double[3] | `[0.0, 0.0, 0.0]` | Static gyro bias to subtract from `angular_velocity` in `rad/s` |
+| `linear_acceleration_bias` | double[3] | `[0.0, 0.0, 0.0]` | Static accelerometer bias to subtract from `linear_acceleration` in `m/s^2` |
 | `angular_velocity_covariance` | double[9] | `[0.0, ...]` | Row-major covariance for `angular_velocity`; all-zero means unknown |
 | `linear_acceleration_covariance` | double[9] | `[0.0, ...]` | Row-major covariance for `linear_acceleration`; all-zero means unknown |
+
+Bias offsets are applied after raw sensor scaling and SI unit conversion:
+
+```text
+published_value = scaled_sensor_value - configured_bias
+```
+
+The corrected acceleration sample is also used by the `roll_pitch` topic.
+
+For an initial stationary bias estimate:
+
+1. Place the IMU in its normal mounted orientation and keep it still.
+2. Record a short sample window from the `output` topic after startup.
+3. Use the mean angular velocity on each axis as `angular_velocity_bias`.
+4. For linear acceleration, subtract the expected gravity vector for the mounted orientation from the measured mean, then use the residual as `linear_acceleration_bias`.
+5. Keep all values in ROS SI units (`rad/s` and `m/s^2`).
+
+This is a static correction only. Re-estimate the offsets when the sensor, mounting, or operating environment changes.
 
 Covariance parameters map directly to the 3x3 row-major arrays in `sensor_msgs/Imu`.
 For a diagonal-only configuration, keep off-diagonal terms at `0.0`:
