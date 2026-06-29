@@ -24,17 +24,18 @@
 #include <string>
 #include <utility>
 
-#define ACCEL_X_OUT 0x3b
-#define ACCEL_Y_OUT 0x3d
-#define ACCEL_Z_OUT 0x3f
-#define TEMP_OUT    0x41  // Built-in temperature sensor (for diagnostics: thermal monitoring)
-#define GYRO_X_OUT  0x43
-#define GYRO_Y_OUT  0x45
-#define GYRO_Z_OUT  0x47
+static constexpr unsigned int ACCEL_X_OUT = 0x3b;
+static constexpr unsigned int ACCEL_Y_OUT = 0x3d;
+static constexpr unsigned int ACCEL_Z_OUT = 0x3f;
+static constexpr unsigned int TEMP_OUT = 0x41;  // Built-in temperature sensor for diagnostics.
+static constexpr unsigned int GYRO_X_OUT = 0x43;
+static constexpr unsigned int GYRO_Y_OUT = 0x45;
+static constexpr unsigned int GYRO_Z_OUT = 0x47;
 
-#define PWR_MGMT_1 0x6B
-#define PWR_MGMT_2 0x6C  // Axis standby flags: bits[5:3]=gyro XYZ, bits[2:0]=accel XYZ (for diagnostics)
-#define DEV_ADDR   0x68
+static constexpr int PWR_MGMT_1 = 0x6B;
+// Axis standby flags: bits[5:3]=gyro XYZ, bits[2:0]=accel XYZ.
+static constexpr unsigned int PWR_MGMT_2 = 0x6C;
+static constexpr int DEV_ADDR = 0x68;
 
 // MPU6050 sensitivity: ±250°/s range → 131 LSB/(°/s)
 static constexpr float GYRO_SENSITIVITY_LSB = 131.0f;
