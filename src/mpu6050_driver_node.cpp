@@ -41,14 +41,16 @@ static constexpr int DEV_ADDR = 0x68;
 static constexpr float GYRO_SENSITIVITY_LSB = 131.0f;
 // MPU6050 sensitivity: ±2g range → 16384 LSB/g
 static constexpr float ACCEL_SENSITIVITY_LSB = 16384.0f;
-// Radians to degrees conversion factor
+// Unit conversion factors
 static constexpr float RAD_TO_DEG = 180.0f / M_PI;
+static constexpr float DEG_TO_RAD = M_PI / 180.0f;
+static constexpr float STANDARD_GRAVITY = 9.80665f;
 static constexpr double DEFAULT_PUBLISH_RATE_HZ = 100.0;
 static constexpr int64_t MIN_TIMER_PERIOD_MS = 1;
 static constexpr float TEMP_WARN_C = 70.0f;
 static constexpr float TEMP_ERROR_C = 85.0f;
-static constexpr float MAX_ACCEL_G = 2.5f;
-static constexpr float MAX_GYRO_DPS = 260.0f;
+static constexpr float MAX_ACCEL_MPS2 = 2.5f * STANDARD_GRAVITY;
+static constexpr float MAX_GYRO_RADPS = 260.0f * DEG_TO_RAD;
 static constexpr double STALE_SAMPLE_PERIOD_MULTIPLIER = 3.0;
 
 Mpu6050Driver::Mpu6050Driver(
@@ -137,9 +139,9 @@ bool Mpu6050Driver::updateCurrentGyroData()
     return false;
   }
   gyro_ = {{
-    gyro_x / GYRO_SENSITIVITY_LSB,
-    gyro_y / GYRO_SENSITIVITY_LSB,
-    gyro_z / GYRO_SENSITIVITY_LSB,
+    gyro_x / GYRO_SENSITIVITY_LSB * DEG_TO_RAD,
+    gyro_y / GYRO_SENSITIVITY_LSB * DEG_TO_RAD,
+    gyro_z / GYRO_SENSITIVITY_LSB * DEG_TO_RAD,
   }};
   return true;
 }
@@ -157,9 +159,9 @@ bool Mpu6050Driver::updateCurrentAccelData()
     return false;
   }
   accel_ = {{
-    accel_x / ACCEL_SENSITIVITY_LSB,
-    accel_y / ACCEL_SENSITIVITY_LSB,
-    accel_z / ACCEL_SENSITIVITY_LSB,
+    accel_x / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY,
+    accel_y / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY,
+    accel_z / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY,
   }};
   return true;
 }
@@ -228,6 +230,8 @@ void Mpu6050Driver::checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrap
   stat.add("I2C connection", fd_ == -1 ? "not initialized" : "ok");
   stat.add("Gyro sensitivity", "131 LSB/(deg/s) [+-250 deg/s]");
   stat.add("Accel sensitivity", "16384 LSB/g [+-2g]");
+  stat.add("IMU output angular velocity unit", "rad/s");
+  stat.add("IMU output linear acceleration unit", "m/s^2");
 
   if (fd_ == -1) {
     stat.summary(DiagnosticStatus::ERROR, "I2C not initialized");
@@ -296,12 +300,12 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
 bool Mpu6050Driver::isLatestSampleValid() const
 {
   for (const auto value : accel_) {
-    if (!std::isfinite(value) || std::fabs(value) > MAX_ACCEL_G) {
+    if (!std::isfinite(value) || std::fabs(value) > MAX_ACCEL_MPS2) {
       return false;
     }
   }
   for (const auto value : gyro_) {
-    if (!std::isfinite(value) || std::fabs(value) > MAX_GYRO_DPS) {
+    if (!std::isfinite(value) || std::fabs(value) > MAX_GYRO_RADPS) {
       return false;
     }
   }
