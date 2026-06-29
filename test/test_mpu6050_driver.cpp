@@ -29,6 +29,9 @@
 #include <string>
 #include <thread>
 
+static constexpr float DEG_TO_RAD = M_PI / 180.0f;
+static constexpr float STANDARD_GRAVITY = 9.80665f;
+
 // ---------------------------------------------------------------------------
 // Mock I2C implementation for testing without real hardware
 // ---------------------------------------------------------------------------
@@ -361,7 +364,7 @@ TEST(Mpu6050DriverTest, AcceptsPositivePublishRateOverride)
 
 TEST(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)
 {
-  // Raw = 0x1000 = 4096 => accel_x = 4096 / 16384.0 = 0.25 g
+  // Raw = 0x1000 = 4096 => accel_x = 4096 / 16384.0 = 0.25 g = 2.4516625 m/s^2
   MockI2C mock;
   mock.reg_values[0x3b] = 0x10;  // ACCEL_X high byte
   mock.reg_values[0x3c] = 0x00;  // ACCEL_X low byte
@@ -370,13 +373,13 @@ TEST(Mpu6050DriverTest, PositiveAccelValueConvertedCorrectly)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr) << "Expected an IMU message to be published";
-  EXPECT_FLOAT_EQ(msg->linear_acceleration.x, 0.25f);
+  EXPECT_FLOAT_EQ(msg->linear_acceleration.x, 0.25f * STANDARD_GRAVITY);
 }
 
 TEST(Mpu6050DriverTest, NegativeAccelValueConvertedCorrectly)
 {
   // Raw = 0x8000 = 32768 => two's complement: 32768 - 65536 = -32768
-  // => accel_x = -32768 / 16384.0 = -2.0 g
+  // => accel_x = -32768 / 16384.0 = -2.0 g = -19.6133 m/s^2
   // Regression: old code used value-65534, yielding -1.9999... instead of -2.0
   MockI2C mock;
   mock.reg_values[0x3b] = 0x80;  // ACCEL_X high byte
@@ -386,12 +389,12 @@ TEST(Mpu6050DriverTest, NegativeAccelValueConvertedCorrectly)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  EXPECT_FLOAT_EQ(msg->linear_acceleration.x, -2.0f);
+  EXPECT_FLOAT_EQ(msg->linear_acceleration.x, -2.0f * STANDARD_GRAVITY);
 }
 
 TEST(Mpu6050DriverTest, MaxNegativeAccelValue)
 {
-  // Raw = 0xFFFF = 65535 => two's complement: -1 => -1 / 16384.0
+  // Raw = 0xFFFF = 65535 => two's complement: -1 => -1 / 16384.0 g
   MockI2C mock;
   mock.reg_values[0x3b] = 0xFF;
   mock.reg_values[0x3c] = 0xFF;
@@ -400,12 +403,12 @@ TEST(Mpu6050DriverTest, MaxNegativeAccelValue)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  EXPECT_NEAR(msg->linear_acceleration.x, -1.0f / 16384.0f, 1e-6f);
+  EXPECT_NEAR(msg->linear_acceleration.x, -STANDARD_GRAVITY / 16384.0f, 1e-6f);
 }
 
 TEST(Mpu6050DriverTest, MaxPositiveAccelValue)
 {
-  // Raw = 0x7FFF = 32767 => 32767 / 16384.0
+  // Raw = 0x7FFF = 32767 => 32767 / 16384.0 g
   MockI2C mock;
   mock.reg_values[0x3b] = 0x7F;
   mock.reg_values[0x3c] = 0xFF;
@@ -414,12 +417,12 @@ TEST(Mpu6050DriverTest, MaxPositiveAccelValue)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  EXPECT_NEAR(msg->linear_acceleration.x, 32767.0f / 16384.0f, 1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.x, 32767.0f / 16384.0f * STANDARD_GRAVITY, 1e-4f);
 }
 
 TEST(Mpu6050DriverTest, GyroScalingApplied)
 {
-  // Raw = 0x0083 = 131 => angular_velocity.x = 131 / 131.0 = 1.0
+  // Raw = 0x0083 = 131 => angular_velocity.x = 131 / 131.0 = 1.0 deg/s
   MockI2C mock;
   mock.reg_values[0x43] = 0x00;
   mock.reg_values[0x44] = 0x83;
@@ -428,13 +431,13 @@ TEST(Mpu6050DriverTest, GyroScalingApplied)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  EXPECT_NEAR(msg->angular_velocity.x, 1.0f, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.x, 1.0f * DEG_TO_RAD, 1e-4f);
 }
 
 TEST(Mpu6050DriverTest, NegativeGyroScalingApplied)
 {
   // Raw = 0xFF7D = 65405 => two's complement: 65405 - 65536 = -131
-  // => angular_velocity.x = -131 / 131.0 = -1.0
+  // => angular_velocity.x = -131 / 131.0 = -1.0 deg/s
   MockI2C mock;
   mock.reg_values[0x43] = 0xFF;
   mock.reg_values[0x44] = 0x7D;
@@ -443,7 +446,7 @@ TEST(Mpu6050DriverTest, NegativeGyroScalingApplied)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  EXPECT_NEAR(msg->angular_velocity.x, -1.0f, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.x, -1.0f * DEG_TO_RAD, 1e-4f);
 }
 
 TEST(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
@@ -474,17 +477,17 @@ TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
 {
   // Set distinct values on all 6 axes to verify they are mapped correctly.
   MockI2C mock;
-  // Accel X: raw = 0x0200 = 512  => 512  / 16384.0 = 0.03125
+  // Accel X: raw = 0x0200 = 512  => 512  / 16384.0 = 0.03125 g
   mock.reg_values[0x3b] = 0x02; mock.reg_values[0x3c] = 0x00;
-  // Accel Y: raw = 0x0400 = 1024 => 1024 / 16384.0 = 0.0625
+  // Accel Y: raw = 0x0400 = 1024 => 1024 / 16384.0 = 0.0625 g
   mock.reg_values[0x3d] = 0x04; mock.reg_values[0x3e] = 0x00;
-  // Accel Z: raw = 0x0800 = 2048 => 2048 / 16384.0 = 0.125
+  // Accel Z: raw = 0x0800 = 2048 => 2048 / 16384.0 = 0.125 g
   mock.reg_values[0x3f] = 0x08; mock.reg_values[0x40] = 0x00;
-  // Gyro X: raw = 0x0083 = 131   => 131  / 131.0   = 1.0
+  // Gyro X: raw = 0x0083 = 131   => 131  / 131.0   = 1.0 deg/s
   mock.reg_values[0x43] = 0x00; mock.reg_values[0x44] = 0x83;
-  // Gyro Y: raw = 0x0106 = 262   => 262  / 131.0   = 2.0
+  // Gyro Y: raw = 0x0106 = 262   => 262  / 131.0   = 2.0 deg/s
   mock.reg_values[0x45] = 0x01; mock.reg_values[0x46] = 0x06;
-  // Gyro Z: raw = 0x0189 = 393   => 393  / 131.0   = 3.0
+  // Gyro Z: raw = 0x0189 = 393   => 393  / 131.0   = 3.0 deg/s
   mock.reg_values[0x47] = 0x01; mock.reg_values[0x48] = 0x89;
 
   rclcpp::NodeOptions opts;
@@ -492,12 +495,12 @@ TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
-  EXPECT_NEAR(msg->linear_acceleration.x, 0.03125f, 1e-4f);
-  EXPECT_NEAR(msg->linear_acceleration.y, 0.0625f,  1e-4f);
-  EXPECT_NEAR(msg->linear_acceleration.z, 0.125f,   1e-4f);
-  EXPECT_NEAR(msg->angular_velocity.x,    1.0f,     1e-4f);
-  EXPECT_NEAR(msg->angular_velocity.y,    2.0f,     1e-4f);
-  EXPECT_NEAR(msg->angular_velocity.z,    3.0f,     1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.x, 0.03125f * STANDARD_GRAVITY, 1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.y, 0.0625f * STANDARD_GRAVITY,  1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.z, 0.125f * STANDARD_GRAVITY,   1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.x,    1.0f * DEG_TO_RAD,           1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.y,    2.0f * DEG_TO_RAD,           1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.z,    3.0f * DEG_TO_RAD,           1e-4f);
 }
 
 TEST(Mpu6050DriverTest, RollPitchZeroWhenFlat)

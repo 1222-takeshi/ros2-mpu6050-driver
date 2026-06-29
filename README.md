@@ -101,9 +101,22 @@ ros2 launch imu_driver mpu6050_driver.launch.xml publish_rate_hz:=200.0
 
 | Topic | Type | Description |
 |-------|------|-------------|
-| `output` | `sensor_msgs/Imu` | Raw IMU data (angular velocity + linear acceleration) |
+| `output` | `sensor_msgs/Imu` | IMU data using ROS SI units (`rad/s` angular velocity, `m/s^2` linear acceleration) |
 | `roll_pitch` | `geometry_msgs/Vector3Stamped` | Roll and pitch angles in degrees (`x=roll`, `y=pitch`, `z=0`) |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Driver health status for ROS diagnostics tools |
+
+### IMU Units
+
+The `output` topic follows the standard `sensor_msgs/Imu` unit conventions:
+
+| Field | Unit |
+|-------|------|
+| `angular_velocity` | `rad/s` |
+| `linear_acceleration` | `m/s^2` |
+
+Internally, the MPU6050 is configured for ±250 deg/s gyro range and ±2g accelerometer range. The driver converts those raw sensor units before publishing `sensor_msgs/Imu`.
+
+If you used an earlier version of this driver that published deg/s and g on `output`, remove downstream unit adapters or disable their `gyro_in_degrees` / `accel_in_g` style conversions to avoid double conversion.
 
 ### Diagnostics
 
