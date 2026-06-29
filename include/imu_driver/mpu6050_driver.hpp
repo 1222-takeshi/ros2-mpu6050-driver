@@ -40,14 +40,15 @@ public:
 private:
   void initializeI2C();
   void onTimer();
-  void updateCurrentGyroData();
-  void updateCurrentAccelData();
+  bool updateCurrentGyroData();
+  bool updateCurrentAccelData();
   void calcRollPitch();
   void imuDataPublish();
   void checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
   void checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
   bool isLatestSampleValid() const;
-  float get2data(int fd, unsigned int reg);
+  bool readReg8Checked(int fd, unsigned int reg, int * value);
+  bool read2data(int fd, unsigned int reg, float * value);
 
   diagnostic_updater::Updater diagnostic_updater_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
@@ -58,6 +59,7 @@ private:
   rclcpp::Time last_sample_time_;
   double publish_rate_hz_ = 0.0;
   std::size_t sample_count_ = 0;
+  bool latest_sample_read_ok_ = true;
   bool latest_sample_valid_ = false;
 
   std::unique_ptr<II2CInterface> owned_i2c_;  ///< Owns the instance when created internally.

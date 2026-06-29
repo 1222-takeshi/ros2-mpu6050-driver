@@ -114,41 +114,78 @@ void Mpu6050Driver::onTimer()
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "I2C not initialized, skipping update");
     return;
   }
-  updateCurrentGyroData();
-  updateCurrentAccelData();
+  latest_sample_read_ok_ = updateCurrentGyroData() && updateCurrentAccelData();
+  if (!latest_sample_read_ok_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "I2C register read failed, skipping update");
+    return;
+  }
   calcRollPitch();
   imuDataPublish();
 }
 
-void Mpu6050Driver::updateCurrentGyroData()
+bool Mpu6050Driver::updateCurrentGyroData()
 {
+  float gyro_x = 0.0f;
+  float gyro_y = 0.0f;
+  float gyro_z = 0.0f;
+  const bool read_ok =
+    read2data(fd_, GYRO_X_OUT, &gyro_x) &&
+    read2data(fd_, GYRO_Y_OUT, &gyro_y) &&
+    read2data(fd_, GYRO_Z_OUT, &gyro_z);
+  if (!read_ok) {
+    return false;
+  }
   gyro_ = {{
-    get2data(fd_, GYRO_X_OUT) / GYRO_SENSITIVITY_LSB,
-    get2data(fd_, GYRO_Y_OUT) / GYRO_SENSITIVITY_LSB,
-    get2data(fd_, GYRO_Z_OUT) / GYRO_SENSITIVITY_LSB,
+    gyro_x / GYRO_SENSITIVITY_LSB,
+    gyro_y / GYRO_SENSITIVITY_LSB,
+    gyro_z / GYRO_SENSITIVITY_LSB,
   }};
+  return true;
 }
 
-void Mpu6050Driver::updateCurrentAccelData()
+bool Mpu6050Driver::updateCurrentAccelData()
 {
+  float accel_x = 0.0f;
+  float accel_y = 0.0f;
+  float accel_z = 0.0f;
+  const bool read_ok =
+    read2data(fd_, ACCEL_X_OUT, &accel_x) &&
+    read2data(fd_, ACCEL_Y_OUT, &accel_y) &&
+    read2data(fd_, ACCEL_Z_OUT, &accel_z);
+  if (!read_ok) {
+    return false;
+  }
   accel_ = {{
-    get2data(fd_, ACCEL_X_OUT) / ACCEL_SENSITIVITY_LSB,
-    get2data(fd_, ACCEL_Y_OUT) / ACCEL_SENSITIVITY_LSB,
-    get2data(fd_, ACCEL_Z_OUT) / ACCEL_SENSITIVITY_LSB,
+    accel_x / ACCEL_SENSITIVITY_LSB,
+    accel_y / ACCEL_SENSITIVITY_LSB,
+    accel_z / ACCEL_SENSITIVITY_LSB,
   }};
+  return true;
 }
 
-float Mpu6050Driver::get2data(int fd, unsigned int reg)
+bool Mpu6050Driver::readReg8Checked(int fd, unsigned int reg, int * value)
 {
-  unsigned int h_value = static_cast<unsigned int>(i2c_->readReg8(fd, reg));
-  unsigned int l_value = static_cast<unsigned int>(i2c_->readReg8(fd, reg + 1));
-  float value = static_cast<float>((h_value << 8) + l_value);
+  const int raw_value = i2c_->readReg8(fd, static_cast<int>(reg));
+  if (raw_value < 0 || raw_value > 0xFF) {
+    return false;
+  }
+  *value = raw_value;
+  return true;
+}
+
+bool Mpu6050Driver::read2data(int fd, unsigned int reg, float * value)
+{
+  int h_value = 0;
+  int l_value = 0;
+  if (!readReg8Checked(fd, reg, &h_value) || !readReg8Checked(fd, reg + 1, &l_value)) {
+    return false;
+  }
+
+  const int raw_value = (h_value << 8) + l_value;
   // Convert from unsigned 16-bit to signed using two's complement.
   // Values >= 32768 (0x8000) represent negative numbers.
-  if (value >= 32768.0f) {
-    return value - 65536.0f;  // 0x10000 = 65536
-  }
-  return value;
+  *value = static_cast<float>(raw_value >= 32768 ? raw_value - 65536 : raw_value);
+  return true;
 }
 
 void Mpu6050Driver::imuDataPublish()
@@ -196,8 +233,15 @@ void Mpu6050Driver::checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrap
     return;
   }
 
-  const float temp_c = get2data(fd_, TEMP_OUT) / 340.0f + 36.53f;
-  const int pwr_mgmt_2 = i2c_->readReg8(fd_, PWR_MGMT_2);
+  float temp_raw = 0.0f;
+  int pwr_mgmt_2 = 0;
+  if (!read2data(fd_, TEMP_OUT, &temp_raw) || !readReg8Checked(fd_, PWR_MGMT_2, &pwr_mgmt_2)) {
+    stat.add("I2C register reads", "failed");
+    stat.summary(DiagnosticStatus::ERROR, "I2C read failed");
+    return;
+  }
+
+  const float temp_c = temp_raw / 340.0f + 36.53f;
   const bool all_axes_active = (pwr_mgmt_2 & 0x3F) == 0x00;
 
   stat.add("Chip temperature C", temp_c);
@@ -222,6 +266,11 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
 
   if (fd_ == -1) {
     stat.summary(DiagnosticStatus::ERROR, "I2C not initialized");
+    return;
+  }
+  stat.add("Latest I2C read ok", latest_sample_read_ok_);
+  if (!latest_sample_read_ok_) {
+    stat.summary(DiagnosticStatus::ERROR, "I2C read failed");
     return;
   }
   if (sample_count_ == 0) {
