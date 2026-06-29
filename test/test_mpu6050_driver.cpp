@@ -23,11 +23,14 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <string>
 #include <thread>
+#include <vector>
 
 static constexpr float DEG_TO_RAD = M_PI / 180.0f;
 static constexpr float STANDARD_GRAVITY = 9.80665f;
@@ -145,6 +148,28 @@ static rclcpp::NodeOptions optionsWithPublishRate(double rate_hz)
   rclcpp::NodeOptions opts;
   opts.parameter_overrides({rclcpp::Parameter("publish_rate_hz", rate_hz)});
   return opts;
+}
+
+static rclcpp::NodeOptions optionsWithCovariances(
+  const std::vector<double> & angular_velocity_covariance,
+  const std::vector<double> & linear_acceleration_covariance)
+{
+  rclcpp::NodeOptions opts;
+  opts.parameter_overrides({
+    rclcpp::Parameter("angular_velocity_covariance", angular_velocity_covariance),
+    rclcpp::Parameter("linear_acceleration_covariance", linear_acceleration_covariance),
+  });
+  return opts;
+}
+
+template<typename Covariance>
+static void expectCovarianceEquals(
+  const Covariance & actual,
+  const std::array<double, 9> & expected)
+{
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_DOUBLE_EQ(actual[i], expected[i]) << "Covariance index " << i << " differs";
+  }
 }
 
 TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
@@ -471,6 +496,149 @@ TEST(Mpu6050DriverTest, ImuMessageTimestampIsSet)
   const auto & stamp = msg->header.stamp;
   EXPECT_TRUE(stamp.sec != 0 || stamp.nanosec != 0)
     << "Message timestamp must be filled in";
+}
+
+TEST(Mpu6050DriverTest, ImuMessageUsesDefaultCovariances)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+
+  std::array<double, 9> default_orientation_covariance{};
+  default_orientation_covariance[0] = -1.0;
+  const std::array<double, 9> default_measurement_covariance{};
+
+  expectCovarianceEquals(msg->orientation_covariance, default_orientation_covariance);
+  expectCovarianceEquals(msg->angular_velocity_covariance, default_measurement_covariance);
+  expectCovarianceEquals(msg->linear_acceleration_covariance, default_measurement_covariance);
+}
+
+TEST(Mpu6050DriverTest, ImuMessagePublishesConfiguredCovariances)
+{
+  MockI2C mock;
+  const std::vector<double> angular_velocity_covariance{
+    0.01, 0.001, 0.002,
+    0.001, 0.02, 0.003,
+    0.002, 0.003, 0.03,
+  };
+  const std::vector<double> linear_acceleration_covariance{
+    0.10, 0.011, 0.012,
+    0.011, 0.20, 0.013,
+    0.012, 0.013, 0.30,
+  };
+  auto opts = optionsWithCovariances(angular_velocity_covariance, linear_acceleration_covariance);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+
+  const std::array<double, 9> expected_angular_velocity_covariance{
+    0.01, 0.001, 0.002,
+    0.001, 0.02, 0.003,
+    0.002, 0.003, 0.03,
+  };
+  const std::array<double, 9> expected_linear_acceleration_covariance{
+    0.10, 0.011, 0.012,
+    0.011, 0.20, 0.013,
+    0.012, 0.013, 0.30,
+  };
+
+  expectCovarianceEquals(msg->angular_velocity_covariance, expected_angular_velocity_covariance);
+  expectCovarianceEquals(
+    msg->linear_acceleration_covariance, expected_linear_acceleration_covariance);
+}
+
+TEST(Mpu6050DriverTest, ImuMessageFallsBackWhenCovarianceSizeIsInvalid)
+{
+  MockI2C mock;
+  const std::vector<double> invalid_angular_velocity_covariance{0.01, 0.02, 0.03};
+  const std::vector<double> linear_acceleration_covariance{
+    0.10, 0.0, 0.0,
+    0.0, 0.20, 0.0,
+    0.0, 0.0, 0.30,
+  };
+  auto opts =
+    optionsWithCovariances(invalid_angular_velocity_covariance, linear_acceleration_covariance);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+
+  const std::array<double, 9> default_measurement_covariance{};
+  const std::array<double, 9> expected_linear_acceleration_covariance{
+    0.10, 0.0, 0.0,
+    0.0, 0.20, 0.0,
+    0.0, 0.0, 0.30,
+  };
+
+  expectCovarianceEquals(msg->angular_velocity_covariance, default_measurement_covariance);
+  expectCovarianceEquals(
+    msg->linear_acceleration_covariance, expected_linear_acceleration_covariance);
+}
+
+TEST(Mpu6050DriverTest, ImuMessageFallsBackWhenCovarianceContainsNonFiniteValue)
+{
+  MockI2C mock;
+  const std::vector<double> angular_velocity_covariance{
+    0.01, 0.0, 0.0,
+    0.0, std::numeric_limits<double>::quiet_NaN(), 0.0,
+    0.0, 0.0, 0.03,
+  };
+  const std::vector<double> linear_acceleration_covariance{
+    0.10, 0.0, 0.0,
+    0.0, 0.20, 0.0,
+    0.0, 0.0, 0.30,
+  };
+  auto opts = optionsWithCovariances(angular_velocity_covariance, linear_acceleration_covariance);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+
+  const std::array<double, 9> default_measurement_covariance{};
+  const std::array<double, 9> expected_linear_acceleration_covariance{
+    0.10, 0.0, 0.0,
+    0.0, 0.20, 0.0,
+    0.0, 0.0, 0.30,
+  };
+
+  expectCovarianceEquals(msg->angular_velocity_covariance, default_measurement_covariance);
+  expectCovarianceEquals(
+    msg->linear_acceleration_covariance, expected_linear_acceleration_covariance);
+}
+
+TEST(Mpu6050DriverTest, ImuMessageFallsBackWhenCovarianceDiagonalIsNegative)
+{
+  MockI2C mock;
+  const std::vector<double> angular_velocity_covariance{
+    0.01, 0.0, 0.0,
+    0.0, 0.02, 0.0,
+    0.0, 0.0, 0.03,
+  };
+  const std::vector<double> invalid_linear_acceleration_covariance{
+    0.10, 0.0, 0.0,
+    0.0, -0.20, 0.0,
+    0.0, 0.0, 0.30,
+  };
+  auto opts =
+    optionsWithCovariances(angular_velocity_covariance, invalid_linear_acceleration_covariance);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+
+  const std::array<double, 9> expected_angular_velocity_covariance{
+    0.01, 0.0, 0.0,
+    0.0, 0.02, 0.0,
+    0.0, 0.0, 0.03,
+  };
+  const std::array<double, 9> default_measurement_covariance{};
+
+  expectCovarianceEquals(msg->angular_velocity_covariance, expected_angular_velocity_covariance);
+  expectCovarianceEquals(msg->linear_acceleration_covariance, default_measurement_covariance);
 }
 
 TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)

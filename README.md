@@ -112,11 +112,15 @@ The `output` topic follows the standard `sensor_msgs/Imu` unit conventions:
 | Field | Unit |
 |-------|------|
 | `angular_velocity` | `rad/s` |
+| `angular_velocity_covariance` | `(rad/s)^2` |
 | `linear_acceleration` | `m/s^2` |
+| `linear_acceleration_covariance` | `(m/s^2)^2` |
 
 Internally, the MPU6050 is configured for ±250 deg/s gyro range and ±2g accelerometer range. The driver converts those raw sensor units before publishing `sensor_msgs/Imu`.
 
 If you used an earlier version of this driver that published deg/s and g on `output`, remove downstream unit adapters or disable their `gyro_in_degrees` / `accel_in_g` style conversions to avoid double conversion.
+
+The driver does not estimate orientation on the `output` topic, so `orientation_covariance[0]` is always set to `-1.0`.
 
 ### Diagnostics
 
@@ -138,6 +142,21 @@ ros2 topic echo /diagnostics
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `publish_rate_hz` | double | `100.0` | IMU publish rate in Hz |
+| `angular_velocity_covariance` | double[9] | `[0.0, ...]` | Row-major covariance for `angular_velocity`; all-zero means unknown |
+| `linear_acceleration_covariance` | double[9] | `[0.0, ...]` | Row-major covariance for `linear_acceleration`; all-zero means unknown |
+
+Covariance parameters map directly to the 3x3 row-major arrays in `sensor_msgs/Imu`.
+For a diagonal-only configuration, keep off-diagonal terms at `0.0`:
+
+```sh
+ros2 launch imu_driver mpu6050_driver.launch.xml \
+  angular_velocity_covariance:="[0.0004, 0.0, 0.0, 0.0, 0.0004, 0.0, 0.0, 0.0, 0.0004]" \
+  linear_acceleration_covariance:="[0.04, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.04]"
+```
+
+For EKF or filter integration, replace these examples with values derived from measurement,
+datasheet assumptions, or a calibration procedure. The all-zero defaults preserve ROS's
+unknown-covariance semantics and are not tuned estimator values.
 
 ### Sensor Configuration
 
