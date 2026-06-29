@@ -11,6 +11,8 @@
 
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>diagnostic_updater</depend>
   <depend>geometry_msgs</depend>
 
 

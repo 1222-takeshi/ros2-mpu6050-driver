@@ -103,6 +103,22 @@ ros2 launch imu_driver mpu6050_driver.launch.xml publish_rate_hz:=200.0
 |-------|------|-------------|
 | `output` | `sensor_msgs/Imu` | Raw IMU data (angular velocity + linear acceleration) |
 | `roll_pitch` | `geometry_msgs/Vector3Stamped` | Roll and pitch angles in degrees (`x=roll`, `y=pitch`, `z=0`) |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Driver health status for ROS diagnostics tools |
+
+### Diagnostics
+
+The driver publishes two diagnostic statuses:
+
+| Status | OK | WARN | ERROR |
+|--------|----|------|-------|
+| `Hardware Status` | I2C is initialized, temperature is normal, and all axes are active | Chip temperature is above 70°C or one or more axes are in standby | I2C is not initialized, an I2C register read fails, or chip temperature is above 85°C |
+| `Data Status` | IMU samples are recent and within the expected range | No sample has been published yet, the latest sample is stale, or the latest sample is outside the expected range | I2C is not initialized or the latest sample read failed |
+
+You can inspect the diagnostics with:
+
+```sh
+ros2 topic echo /diagnostics
+```
 
 ### Parameters
 
