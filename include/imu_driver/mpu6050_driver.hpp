@@ -47,6 +47,7 @@ private:
   void checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
   void checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
   bool isLatestSampleValid() const;
+  std::array<double, 9> getCovarianceParameter(const std::string & parameter_name);
   bool readReg8Checked(int fd, unsigned int reg, int * value);
   bool read2data(int fd, unsigned int reg, float * value);
 
@@ -56,6 +57,8 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   std::array<float, 3> gyro_{};
   std::array<float, 3> accel_{};
+  std::array<double, 9> angular_velocity_covariance_{};
+  std::array<double, 9> linear_acceleration_covariance_{};
   rclcpp::Time last_sample_time_;
   double publish_rate_hz_ = 0.0;
   std::size_t sample_count_ = 0;

@@ -18,11 +18,13 @@
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <rclcpp/timer.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 static constexpr unsigned int ACCEL_X_OUT = 0x3b;
 static constexpr unsigned int ACCEL_Y_OUT = 0x3d;
@@ -52,6 +54,12 @@ static constexpr float TEMP_ERROR_C = 85.0f;
 static constexpr float MAX_ACCEL_MPS2 = 2.5f * STANDARD_GRAVITY;
 static constexpr float MAX_GYRO_RADPS = 260.0f * DEG_TO_RAD;
 static constexpr double STALE_SAMPLE_PERIOD_MULTIPLIER = 3.0;
+static constexpr std::size_t COVARIANCE_SIZE = 9;
+
+static std::vector<double> defaultCovarianceParameter()
+{
+  return std::vector<double>(COVARIANCE_SIZE, 0.0);
+}
 
 Mpu6050Driver::Mpu6050Driver(
   const std::string & node_name,
@@ -68,6 +76,10 @@ Mpu6050Driver::Mpu6050Driver(
   }
 
   declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ);
+  declare_parameter<std::vector<double>>(
+    "angular_velocity_covariance", defaultCovarianceParameter());
+  declare_parameter<std::vector<double>>(
+    "linear_acceleration_covariance", defaultCovarianceParameter());
   double rate_hz = get_parameter("publish_rate_hz").as_double();
   if (!std::isfinite(rate_hz) || rate_hz <= 0.0) {
     RCLCPP_ERROR(
@@ -83,6 +95,8 @@ Mpu6050Driver::Mpu6050Driver(
     period_ms = MIN_TIMER_PERIOD_MS;
   }
   publish_rate_hz_ = rate_hz;
+  angular_velocity_covariance_ = getCovarianceParameter("angular_velocity_covariance");
+  linear_acceleration_covariance_ = getCovarianceParameter("linear_acceleration_covariance");
 
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
   roll_pitch_pub_ =
@@ -200,12 +214,15 @@ void Mpu6050Driver::imuDataPublish()
 
   msg.header.stamp = last_sample_time_;
   msg.header.frame_id = "imu";
+  msg.orientation_covariance[0] = -1.0;
   msg.angular_velocity.x = gyro_[0];
   msg.angular_velocity.y = gyro_[1];
   msg.angular_velocity.z = gyro_[2];
+  msg.angular_velocity_covariance = angular_velocity_covariance_;
   msg.linear_acceleration.x = accel_[0];
   msg.linear_acceleration.y = accel_[1];
   msg.linear_acceleration.z = accel_[2];
+  msg.linear_acceleration_covariance = linear_acceleration_covariance_;
   imu_pub_->publish(msg);
 }
 
@@ -310,4 +327,18 @@ bool Mpu6050Driver::isLatestSampleValid() const
     }
   }
   return true;
+}
+
+std::array<double, 9> Mpu6050Driver::getCovarianceParameter(const std::string & parameter_name)
+{
+  std::array<double, 9> covariance{};
+  const auto values = get_parameter(parameter_name).as_double_array();
+  if (values.size() != covariance.size()) {
+    RCLCPP_ERROR(
+      get_logger(), "Parameter '%s' must contain exactly %zu values; using all zeros",
+      parameter_name.c_str(), covariance.size());
+    return covariance;
+  }
+  std::copy(values.begin(), values.end(), covariance.begin());
+  return covariance;
 }

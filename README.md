@@ -118,6 +118,20 @@ Internally, the MPU6050 is configured for ±250 deg/s gyro range and ±2g accele
 
 If you used an earlier version of this driver that published deg/s and g on `output`, remove downstream unit adapters or disable their `gyro_in_degrees` / `accel_in_g` style conversions to avoid double conversion.
 
+### IMU Covariance
+
+The driver does not estimate orientation on the `output` topic, so `orientation_covariance[0]` is set to `-1` in every `sensor_msgs/Imu` message.
+
+Angular velocity and linear acceleration covariance arrays are configurable as row-major 3x3 matrices. They default to all zeros for compatibility; set them when feeding the driver output into an EKF or another estimator that requires explicit sensor uncertainty.
+
+Example parameter override:
+
+```sh
+ros2 run imu_driver imu_driver --ros-args \
+  -p angular_velocity_covariance:="[0.0004, 0.0, 0.0, 0.0, 0.0004, 0.0, 0.0, 0.0, 0.0004]" \
+  -p linear_acceleration_covariance:="[0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01]"
+```
+
 ### Diagnostics
 
 The driver publishes two diagnostic statuses:
@@ -138,6 +152,8 @@ ros2 topic echo /diagnostics
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `publish_rate_hz` | double | `100.0` | IMU publish rate in Hz |
+| `angular_velocity_covariance` | double[9] | all zeros | Row-major 3x3 covariance for `angular_velocity` in `(rad/s)^2` |
+| `linear_acceleration_covariance` | double[9] | all zeros | Row-major 3x3 covariance for `linear_acceleration` in `(m/s^2)^2` |
 
 ### Sensor Configuration
 

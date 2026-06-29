@@ -28,6 +28,7 @@
 #include <map>
 #include <string>
 #include <thread>
+#include <vector>
 
 static constexpr float DEG_TO_RAD = M_PI / 180.0f;
 static constexpr float STANDARD_GRAVITY = 9.80665f;
@@ -471,6 +472,66 @@ TEST(Mpu6050DriverTest, ImuMessageTimestampIsSet)
   const auto & stamp = msg->header.stamp;
   EXPECT_TRUE(stamp.sec != 0 || stamp.nanosec != 0)
     << "Message timestamp must be filled in";
+}
+
+TEST(Mpu6050DriverTest, ImuCovarianceDefaultsArePublished)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_EQ(msg->orientation_covariance[0], -1.0);
+  for (std::size_t i = 1; i < msg->orientation_covariance.size(); ++i) {
+    EXPECT_EQ(msg->orientation_covariance[i], 0.0);
+  }
+  for (const auto value : msg->angular_velocity_covariance) {
+    EXPECT_EQ(value, 0.0);
+  }
+  for (const auto value : msg->linear_acceleration_covariance) {
+    EXPECT_EQ(value, 0.0);
+  }
+}
+
+TEST(Mpu6050DriverTest, ImuCovarianceOverridesArePublished)
+{
+  const std::vector<double> angular_covariance{
+    0.001, 0.002, 0.003,
+    0.004, 0.005, 0.006,
+    0.007, 0.008, 0.009};
+  const std::vector<double> linear_covariance{
+    0.101, 0.102, 0.103,
+    0.104, 0.105, 0.106,
+    0.107, 0.108, 0.109};
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  opts.parameter_overrides({
+    rclcpp::Parameter("angular_velocity_covariance", angular_covariance),
+    rclcpp::Parameter("linear_acceleration_covariance", linear_covariance)});
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  for (std::size_t i = 0; i < angular_covariance.size(); ++i) {
+    EXPECT_EQ(msg->angular_velocity_covariance[i], angular_covariance[i]);
+    EXPECT_EQ(msg->linear_acceleration_covariance[i], linear_covariance[i]);
+  }
+}
+
+TEST(Mpu6050DriverTest, InvalidCovarianceOverrideFallsBackToZero)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  opts.parameter_overrides({
+    rclcpp::Parameter("angular_velocity_covariance", std::vector<double>{0.001, 0.002})});
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  for (const auto value : msg->angular_velocity_covariance) {
+    EXPECT_EQ(value, 0.0);
+  }
 }
 
 TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
