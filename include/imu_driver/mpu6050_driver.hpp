@@ -50,6 +50,9 @@ private:
   bool isLatestSampleValid() const;
   bool readReg8Checked(int fd, unsigned int reg, int * value);
   bool read2data(int fd, unsigned int reg, float * value);
+  std::array<double, 3> parseBiasParameter(
+    const std::string & parameter_name,
+    const std::vector<double> & values) const;
   std::array<double, 9> parseCovarianceParameter(
     const std::string & parameter_name,
     const std::vector<double> & values) const;
@@ -58,8 +61,10 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr roll_pitch_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  std::array<float, 3> gyro_{};
-  std::array<float, 3> accel_{};
+  std::array<double, 3> gyro_{};
+  std::array<double, 3> accel_{};
+  std::array<double, 3> angular_velocity_bias_{};
+  std::array<double, 3> linear_acceleration_bias_{};
   std::array<double, 9> angular_velocity_covariance_{};
   std::array<double, 9> linear_acceleration_covariance_{};
   rclcpp::Time last_sample_time_;
