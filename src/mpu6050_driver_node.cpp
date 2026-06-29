@@ -109,6 +109,8 @@ Mpu6050Driver::Mpu6050Driver(
     period_ms = MIN_TIMER_PERIOD_MS;
   }
   publish_rate_hz_ = rate_hz;
+  expected_sample_interval_s_ = static_cast<double>(period_ms) / 1000.0;
+  sample_interval_tolerance_s_ = expected_sample_interval_s_;
 
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
   roll_pitch_pub_ =
@@ -220,7 +222,18 @@ bool Mpu6050Driver::read2data(int fd, unsigned int reg, float * value)
 void Mpu6050Driver::imuDataPublish()
 {
   sensor_msgs::msg::Imu msg;
-  last_sample_time_ = now();
+  const auto sample_time = now();
+  if (sample_count_ > 0) {
+    latest_sample_interval_s_ = (sample_time - last_sample_time_).seconds();
+    latest_sample_interval_error_s_ =
+      std::fabs(latest_sample_interval_s_ - expected_sample_interval_s_);
+    if (latest_sample_interval_error_s_ > max_sample_interval_error_s_) {
+      max_sample_interval_error_s_ = latest_sample_interval_error_s_;
+    }
+    sample_interval_available_ = true;
+  }
+
+  last_sample_time_ = sample_time;
   latest_sample_valid_ = isLatestSampleValid();
   ++sample_count_;
 
@@ -313,14 +326,25 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
   }
 
   const double sample_age_s = (now() - last_sample_time_).seconds();
-  const double expected_period_s = 1.0 / publish_rate_hz_;
   stat.add("Latest sample age sec", sample_age_s);
   stat.add("Latest sample valid", latest_sample_valid_);
+  stat.add("Expected sample interval sec", expected_sample_interval_s_);
+  stat.add("Sample interval tolerance sec", sample_interval_tolerance_s_);
+  if (sample_interval_available_) {
+    stat.add("Latest sample interval sec", latest_sample_interval_s_);
+    stat.add("Latest sample interval error sec", latest_sample_interval_error_s_);
+    stat.add("Max sample interval error sec", max_sample_interval_error_s_);
+  }
+  const bool interval_jitter_above_tolerance =
+    sample_interval_available_ &&
+    latest_sample_interval_error_s_ > sample_interval_tolerance_s_;
 
   if (!latest_sample_valid_) {
     stat.summary(DiagnosticStatus::WARN, "Latest IMU sample outside expected range");
-  } else if (sample_age_s > expected_period_s * STALE_SAMPLE_PERIOD_MULTIPLIER) {
+  } else if (sample_age_s > expected_sample_interval_s_ * STALE_SAMPLE_PERIOD_MULTIPLIER) {
     stat.summary(DiagnosticStatus::WARN, "No recent IMU sample");
+  } else if (interval_jitter_above_tolerance) {
+    stat.summary(DiagnosticStatus::WARN, "IMU sample interval jitter above tolerance");
   } else {
     stat.summary(DiagnosticStatus::OK, "Data OK");
   }

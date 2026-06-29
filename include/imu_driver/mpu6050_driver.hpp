@@ -69,9 +69,15 @@ private:
   std::array<double, 9> linear_acceleration_covariance_{};
   rclcpp::Time last_sample_time_;
   double publish_rate_hz_ = 0.0;
+  double expected_sample_interval_s_ = 0.0;
+  double sample_interval_tolerance_s_ = 0.0;
+  double latest_sample_interval_s_ = 0.0;
+  double latest_sample_interval_error_s_ = 0.0;
+  double max_sample_interval_error_s_ = 0.0;
   std::size_t sample_count_ = 0;
   bool latest_sample_read_ok_ = true;
   bool latest_sample_valid_ = false;
+  bool sample_interval_available_ = false;
 
   std::unique_ptr<II2CInterface> owned_i2c_;  ///< Owns the instance when created internally.
   II2CInterface * i2c_;                        ///< Non-owning pointer used for all I2C calls.

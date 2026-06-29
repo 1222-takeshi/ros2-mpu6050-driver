@@ -129,13 +129,26 @@ The driver publishes two diagnostic statuses:
 | Status | OK | WARN | ERROR |
 |--------|----|------|-------|
 | `Hardware Status` | I2C is initialized, temperature is normal, and all axes are active | Chip temperature is above 70°C or one or more axes are in standby | I2C is not initialized, an I2C register read fails, or chip temperature is above 85°C |
-| `Data Status` | IMU samples are recent and within the expected range | No sample has been published yet, the latest sample is stale, or the latest sample is outside the expected range | I2C is not initialized or the latest sample read failed |
+| `Data Status` | IMU samples are recent, within range, and on interval | No sample has been published yet, the latest sample is stale, outside the expected range, or has high interval jitter | I2C is not initialized or the latest sample read failed |
 
 You can inspect the diagnostics with:
 
 ```sh
 ros2 topic echo /diagnostics
 ```
+
+`Data Status` includes timing fields for runtime observation:
+
+| Field | Meaning |
+|-------|---------|
+| `Expected sample interval sec` | Effective timer interval after publish-rate clamping |
+| `Latest sample interval sec` | Time between the latest two published IMU samples |
+| `Latest sample interval error sec` | Absolute difference between latest and expected intervals |
+| `Max sample interval error sec` | Maximum observed interval error since node startup |
+| `Sample interval tolerance sec` | Warning threshold for interval error |
+
+For timing checks on hardware, run the node under expected robot load and watch
+`Latest sample interval error sec` and `Max sample interval error sec` in `/diagnostics`.
 
 ### Parameters
 

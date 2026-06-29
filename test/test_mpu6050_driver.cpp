@@ -19,6 +19,7 @@
 
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <diagnostic_msgs/msg/key_value.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -184,6 +185,30 @@ static void expectCovarianceEquals(
   }
 }
 
+static const diagnostic_msgs::msg::KeyValue * findDiagnosticValue(
+  const diagnostic_msgs::msg::DiagnosticStatus & status,
+  const std::string & key)
+{
+  for (const auto & value : status.values) {
+    if (value.key == key) {
+      return &value;
+    }
+  }
+  return nullptr;
+}
+
+static double diagnosticValueAsDouble(
+  const diagnostic_msgs::msg::DiagnosticStatus & status,
+  const std::string & key)
+{
+  const auto * value = findDiagnosticValue(status, key);
+  EXPECT_NE(value, nullptr) << "Expected diagnostic key: " << key;
+  if (value == nullptr) {
+    return 0.0;
+  }
+  return std::stod(value->value);
+}
+
 TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
 {
   // PWR_MGMT_1 (0x6B) must be written with 0x00 to wake MPU6050 from sleep.
@@ -337,6 +362,43 @@ TEST(Mpu6050DriverTest, PublishesDataDiagnosticOkAfterSample)
     << "Expected a data diagnostic status";
   EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::OK);
   EXPECT_EQ(status.message, "Data OK");
+}
+
+TEST(Mpu6050DriverTest, PublishesDataDiagnosticTimingFieldsAfterSamples)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  ASSERT_NE(spinAndCapture(node), nullptr);
+  ASSERT_NE(spinAndCapture(node), nullptr);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status))
+    << "Expected a data diagnostic status";
+
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Expected sample interval sec"), 0.01);
+  EXPECT_GT(diagnosticValueAsDouble(status, "Latest sample interval sec"), 0.0);
+  EXPECT_GE(diagnosticValueAsDouble(status, "Latest sample interval error sec"), 0.0);
+  EXPECT_GE(diagnosticValueAsDouble(status, "Max sample interval error sec"), 0.0);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Sample interval tolerance sec"), 0.01);
+}
+
+TEST(Mpu6050DriverTest, DataDiagnosticUsesClampedTimerPeriodForExpectedInterval)
+{
+  MockI2C mock;
+  auto opts = optionsWithPublishRate(5000.0);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  ASSERT_NE(spinAndCapture(node), nullptr);
+  ASSERT_NE(spinAndCapture(node), nullptr);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status))
+    << "Expected a data diagnostic status";
+
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Expected sample interval sec"), 0.001);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Sample interval tolerance sec"), 0.001);
 }
 
 TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenSampleReadFails)
