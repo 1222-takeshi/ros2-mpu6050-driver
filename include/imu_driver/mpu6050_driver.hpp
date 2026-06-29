@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <vector>
 
 class Mpu6050Driver : public rclcpp::Node
 {
@@ -49,6 +50,9 @@ private:
   bool isLatestSampleValid() const;
   bool readReg8Checked(int fd, unsigned int reg, int * value);
   bool read2data(int fd, unsigned int reg, float * value);
+  std::array<double, 9> parseCovarianceParameter(
+    const std::string & parameter_name,
+    const std::vector<double> & values) const;
 
   diagnostic_updater::Updater diagnostic_updater_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
@@ -56,6 +60,8 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   std::array<float, 3> gyro_{};
   std::array<float, 3> accel_{};
+  std::array<double, 9> angular_velocity_covariance_{};
+  std::array<double, 9> linear_acceleration_covariance_{};
   rclcpp::Time last_sample_time_;
   double publish_rate_hz_ = 0.0;
   std::size_t sample_count_ = 0;
