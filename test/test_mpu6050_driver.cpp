@@ -269,6 +269,20 @@ TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticErrorWhenRegisterReadFails)
   EXPECT_EQ(status.message, "I2C read failed");
 }
 
+TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticErrorWhenRegisterReadOutOfRange)
+{
+  MockI2C mock;
+  mock.reg_values[0x41] = 0x100;  // TEMP_OUT high byte must be an unsigned byte.
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
+    << "Expected a hardware diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
+  EXPECT_EQ(status.message, "I2C read failed");
+}
+
 TEST(Mpu6050DriverTest, PublishesDataDiagnosticOkAfterSample)
 {
   MockI2C mock;
@@ -289,6 +303,20 @@ TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenSampleReadFails)
 {
   MockI2C mock;
   mock.reg_values[0x43] = -1;  // GYRO_X high byte read failure
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status))
+    << "Expected a data diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
+  EXPECT_EQ(status.message, "I2C read failed");
+}
+
+TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenRegisterReadOutOfRange)
+{
+  MockI2C mock;
+  mock.reg_values[0x43] = 0x100;  // GYRO_X high byte must be an unsigned byte.
   rclcpp::NodeOptions opts;
   auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
