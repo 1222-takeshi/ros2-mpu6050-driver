@@ -69,6 +69,7 @@ private:
   std::array<double, 9> linear_acceleration_covariance_{};
   rclcpp::Time last_sample_time_;
   double publish_rate_hz_ = 0.0;
+  double effective_publish_rate_hz_ = 0.0;
   double expected_sample_interval_s_ = 0.0;
   double sample_interval_tolerance_s_ = 0.0;
   double latest_sample_interval_s_ = 0.0;
