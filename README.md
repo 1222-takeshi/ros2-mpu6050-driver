@@ -141,6 +141,8 @@ ros2 topic echo /diagnostics
 
 | Field | Meaning |
 |-------|---------|
+| `Configured publish_rate_hz` | Requested publish rate after invalid values fall back to the default |
+| `Effective publish_rate_hz` | Timer-backed publish rate after millisecond timer resolution clamping |
 | `Expected sample interval sec` | Effective timer interval after publish-rate clamping |
 | `Latest sample interval sec` | Time between the latest two published IMU samples |
 | `Latest sample interval error sec` | Absolute difference between latest and expected intervals |
