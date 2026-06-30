@@ -191,6 +191,91 @@ For EKF or filter integration, replace these examples with values derived from m
 datasheet assumptions, or a calibration procedure. The all-zero defaults preserve ROS's
 unknown-covariance semantics and are not tuned estimator values.
 
+### Estimator Setup
+
+Use the raw `output` stream as the input to downstream estimators or orientation filters.
+With the provided launch file, `output` is remapped to `/imu/data_raw` by default.
+This driver publishes angular velocity and linear acceleration in ROS SI units, but it does not
+estimate orientation. Consumers must treat `orientation_covariance[0] = -1.0` as orientation
+unavailable on the raw stream.
+
+Recommended setup sequence:
+
+1. Verify the MPU6050 appears on I2C with `i2cdetect -y 1`.
+2. Launch the driver and confirm `/imu/data_raw` publishes `sensor_msgs/Imu`.
+3. Confirm `/diagnostics` reports `Hardware Status` and `Data Status` as OK under normal load.
+4. Estimate and configure static bias offsets while the IMU is stationary.
+5. Configure covariance values from measured variance or datasheet assumptions.
+6. Re-check `/diagnostics` timing fields while the robot is running its normal workload.
+7. Feed `/imu/data_raw` into the downstream filter or estimator.
+
+#### Calibration Workflow
+
+Run calibration with the IMU mounted in its normal robot orientation:
+
+1. Keep the robot stationary on a stable surface.
+2. Start the driver and wait for startup transients to settle.
+3. Record a short sample window from `/imu/data_raw`.
+4. Compute the mean `angular_velocity` on each axis and use it as `angular_velocity_bias`.
+5. Compute the mean `linear_acceleration`, subtract the expected gravity vector for the mounted
+   orientation, and use the residual as `linear_acceleration_bias`.
+6. Re-launch the driver with those bias values and confirm the stationary output is near zero
+   angular velocity and near the expected gravity vector.
+
+Example launch with static bias and diagonal covariance values:
+
+```sh
+ros2 launch imu_driver mpu6050_driver.launch.xml \
+  angular_velocity_bias:="[0.001, -0.002, 0.0005]" \
+  linear_acceleration_bias:="[0.05, -0.03, 0.10]" \
+  angular_velocity_covariance:="[0.0004, 0.0, 0.0, 0.0, 0.0004, 0.0, 0.0, 0.0, 0.0004]" \
+  linear_acceleration_covariance:="[0.04, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.04]"
+```
+
+Replace the example numbers with values measured on your sensor and mounting. Re-estimate them
+after changing the IMU, bracket, wiring, vibration isolation, or operating environment.
+
+#### imu_filter_madgwick Integration
+
+`imu_filter_madgwick` can estimate orientation from angular velocity and acceleration, and can
+optionally use magnetometer data. On ROS 2 Humble, install it with:
+
+```sh
+sudo apt install ros-humble-imu-tools
+```
+
+This driver's launch file remaps `output` to `/imu/data_raw` by default, which matches the raw IMU
+input topic used by `imu_filter_madgwick_node`. If you do not have a synchronized magnetometer
+topic, disable magnetometer fusion:
+
+```sh
+ros2 run imu_filter_madgwick imu_filter_madgwick_node --ros-args \
+  -p use_mag:=false \
+  -p publish_tf:=false
+```
+
+The filtered orientation output is published on `/imu/data`. Check it with:
+
+```sh
+ros2 topic echo /imu/data
+ros2 topic hz /imu/data
+```
+
+Keep `remove_gravity_vector` disabled unless the downstream estimator explicitly expects
+gravity-compensated linear acceleration. For state estimators, document whether they consume the
+raw `/imu/data_raw` stream or the filtered `/imu/data` stream, because only the filtered stream
+contains an orientation estimate.
+
+#### Timing and Diagnostics Checklist
+
+Before using the IMU in an EKF, SLAM, or control loop, verify:
+
+- `Latest sample age sec` stays below the stale-sample threshold.
+- `Latest sample interval sec` is close to `Expected sample interval sec`.
+- `Max sample interval error sec` remains acceptable under normal CPU and I2C load.
+- covariance values are configured when the downstream estimator depends on them.
+- frame IDs are consistent with the robot's TF tree.
+
 ### Sensor Configuration
 
 The driver uses the following MPU6050 default settings:
@@ -204,4 +289,7 @@ The driver uses the following MPU6050 default settings:
 
 ## References
 
+- [sensor_msgs/Imu message definition](https://docs.ros2.org/foxy/api/sensor_msgs/msg/Imu.html)
+- [imu_tools repository](https://github.com/CCNYRoboticsLab/imu_tools)
+- [imu_filter_madgwick package](https://index.ros.org/p/imu_filter_madgwick/)
 - [MPU6050 ROS2 driver reference](https://shizenkarasuzon.hatenablog.com/entry/2019/03/06/163906)
