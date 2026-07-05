@@ -378,6 +378,7 @@ TEST(Mpu6050DriverTest, PublishesDataDiagnosticTimingFieldsAfterSamples)
     << "Expected a data diagnostic status";
 
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Expected sample interval sec"), 0.01);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Effective publish_rate_hz"), 100.0);
   EXPECT_GT(diagnosticValueAsDouble(status, "Latest sample interval sec"), 0.0);
   EXPECT_GE(diagnosticValueAsDouble(status, "Latest sample interval error sec"), 0.0);
   EXPECT_GE(diagnosticValueAsDouble(status, "Max sample interval error sec"), 0.0);
@@ -398,6 +399,8 @@ TEST(Mpu6050DriverTest, DataDiagnosticUsesClampedTimerPeriodForExpectedInterval)
     << "Expected a data diagnostic status";
 
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Expected sample interval sec"), 0.001);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Configured publish_rate_hz"), 5000.0);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Effective publish_rate_hz"), 1000.0);
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Sample interval tolerance sec"), 0.001);
 }
 

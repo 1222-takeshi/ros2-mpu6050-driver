@@ -110,6 +110,7 @@ Mpu6050Driver::Mpu6050Driver(
   }
   publish_rate_hz_ = rate_hz;
   expected_sample_interval_s_ = static_cast<double>(period_ms) / 1000.0;
+  effective_publish_rate_hz_ = 1.0 / expected_sample_interval_s_;
   sample_interval_tolerance_s_ = expected_sample_interval_s_;
 
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>("output", rclcpp::QoS{10});
@@ -309,6 +310,7 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
   using diagnostic_msgs::msg::DiagnosticStatus;
 
   stat.add("Configured publish_rate_hz", publish_rate_hz_);
+  stat.add("Effective publish_rate_hz", effective_publish_rate_hz_);
   stat.add("Published samples", sample_count_);
 
   if (fd_ == -1) {
