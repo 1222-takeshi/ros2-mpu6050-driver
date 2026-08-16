@@ -670,7 +670,8 @@ TEST(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
 TEST(Mpu6050DriverTest, FrameIdOverrideIsAppliedToImuAndRollPitch)
 {
   MockI2C mock;
-  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), optionsWithFrameId("imu_link"), &mock);
+  auto node = std::make_shared<Mpu6050Driver>(
+    testNodeName(), optionsWithFrameId("imu_link"), &mock);
 
   auto imu_msg = spinAndCapture(node);
   ASSERT_NE(imu_msg, nullptr);
