@@ -77,6 +77,7 @@ Mpu6050Driver::Mpu6050Driver(
   }
 
   declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ);
+  frame_id_ = declare_parameter<std::string>("frame_id", "imu");
   const auto angular_velocity_bias = declare_parameter<std::vector<double>>(
     "angular_velocity_bias", DEFAULT_BIAS);
   const auto linear_acceleration_bias = declare_parameter<std::vector<double>>(
@@ -239,7 +240,7 @@ void Mpu6050Driver::imuDataPublish()
   ++sample_count_;
 
   msg.header.stamp = last_sample_time_;
-  msg.header.frame_id = "imu";
+  msg.header.frame_id = frame_id_;
   msg.orientation_covariance = ORIENTATION_NOT_ESTIMATED_COVARIANCE;
   msg.angular_velocity.x = gyro_[0];
   msg.angular_velocity.y = gyro_[1];
@@ -259,7 +260,7 @@ void Mpu6050Driver::calcRollPitch()
 
   geometry_msgs::msg::Vector3Stamped msg;
   msg.header.stamp = now();
-  msg.header.frame_id = "imu";
+  msg.header.frame_id = frame_id_;
   msg.vector.x = roll;
   msg.vector.y = pitch;
   msg.vector.z = 0.0f;
