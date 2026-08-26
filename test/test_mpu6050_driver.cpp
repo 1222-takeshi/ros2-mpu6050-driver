@@ -151,6 +151,13 @@ static rclcpp::NodeOptions optionsWithPublishRate(double rate_hz)
   return opts;
 }
 
+static rclcpp::NodeOptions optionsWithFrameId(const std::string & frame_id)
+{
+  rclcpp::NodeOptions opts;
+  opts.parameter_overrides({rclcpp::Parameter("frame_id", frame_id)});
+  return opts;
+}
+
 static rclcpp::NodeOptions optionsWithCovariances(
   const std::vector<double> & angular_velocity_covariance,
   const std::vector<double> & linear_acceleration_covariance)
@@ -654,6 +661,32 @@ TEST(Mpu6050DriverTest, ImuMessageHasCorrectFrameId)
   MockI2C mock;
   rclcpp::NodeOptions opts;
   auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_EQ(msg->header.frame_id, "imu");
+}
+
+TEST(Mpu6050DriverTest, FrameIdOverrideIsAppliedToImuAndRollPitch)
+{
+  MockI2C mock;
+  auto node = std::make_shared<Mpu6050Driver>(
+    testNodeName(), optionsWithFrameId("imu_link"), &mock);
+
+  auto imu_msg = spinAndCapture(node);
+  ASSERT_NE(imu_msg, nullptr);
+  EXPECT_EQ(imu_msg->header.frame_id, "imu_link");
+
+  auto roll_pitch_msg = spinAndCaptureRollPitch(node);
+  ASSERT_NE(roll_pitch_msg, nullptr);
+  EXPECT_EQ(roll_pitch_msg->header.frame_id, "imu_link");
+}
+
+TEST(Mpu6050DriverTest, EmptyFrameIdFallsBackToDefault)
+{
+  MockI2C mock;
+  auto node = std::make_shared<Mpu6050Driver>(
+    testNodeName(), optionsWithFrameId(""), &mock);
 
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
