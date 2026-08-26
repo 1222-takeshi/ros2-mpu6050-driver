@@ -78,6 +78,10 @@ Mpu6050Driver::Mpu6050Driver(
 
   declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ);
   frame_id_ = declare_parameter<std::string>("frame_id", "imu");
+  if (frame_id_.empty()) {
+    RCLCPP_WARN(get_logger(), "frame_id must not be empty; falling back to 'imu'");
+    frame_id_ = "imu";
+  }
   const auto angular_velocity_bias = declare_parameter<std::vector<double>>(
     "angular_velocity_bias", DEFAULT_BIAS);
   const auto linear_acceleration_bias = declare_parameter<std::vector<double>>(
