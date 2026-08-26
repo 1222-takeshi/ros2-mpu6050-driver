@@ -682,6 +682,17 @@ TEST(Mpu6050DriverTest, FrameIdOverrideIsAppliedToImuAndRollPitch)
   EXPECT_EQ(roll_pitch_msg->header.frame_id, "imu_link");
 }
 
+TEST(Mpu6050DriverTest, EmptyFrameIdFallsBackToDefault)
+{
+  MockI2C mock;
+  auto node = std::make_shared<Mpu6050Driver>(
+    testNodeName(), optionsWithFrameId(""), &mock);
+
+  auto msg = spinAndCapture(node);
+  ASSERT_NE(msg, nullptr);
+  EXPECT_EQ(msg->header.frame_id, "imu");
+}
+
 TEST(Mpu6050DriverTest, ImuMessageTimestampIsSet)
 {
   MockI2C mock;
