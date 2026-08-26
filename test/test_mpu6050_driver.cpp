@@ -46,6 +46,7 @@ public:
   int setup_return_value = 5;      ///< Simulated valid file descriptor
   std::map<int, int> reg_values;   ///< Values returned by readReg8
   std::map<int, int> written_regs; ///< Records of writeReg8 calls
+  int write_return_value = 0;   ///< Simulated writeReg8 return code
 
   int setup(int /*dev_addr*/) override { return setup_return_value; }
 
@@ -58,7 +59,7 @@ public:
   int writeReg8(int /*fd*/, int reg, int data) override
   {
     written_regs[reg] = data;
-    return 0;
+    return write_return_value;
   }
 };
 
@@ -245,6 +246,24 @@ TEST(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
 
   EXPECT_EQ(mock.written_regs.count(0x6B), 0u)
     << "PWR_MGMT_1 must not be written when I2C setup failed";
+}
+
+TEST(Mpu6050DriverTest, HandlesWakeUpWriteFailureAsInitializationFailure)
+{
+  MockI2C mock;
+  mock.write_return_value = -1;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  EXPECT_EQ(mock.written_regs.at(0x6B), 0);
+  EXPECT_EQ(spinAndCapture(node, std::chrono::milliseconds(100)), nullptr)
+    << "A failed wake-up write must prevent IMU publishing";
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
+    << "Expected a hardware diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
+  EXPECT_EQ(status.message, "I2C not initialized");
 }
 
 TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticOk)
