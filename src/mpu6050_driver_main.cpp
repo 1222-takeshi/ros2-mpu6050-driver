@@ -24,5 +24,6 @@ int main(int argc, char ** argv)
   rclcpp::NodeOptions node_options;
   auto node = std::make_shared<Mpu6050Driver>("mpu6050_driver_node", node_options);
   rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
