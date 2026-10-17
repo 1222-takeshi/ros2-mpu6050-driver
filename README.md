@@ -97,6 +97,12 @@ Example override:
 ros2 launch imu_driver mpu6050_driver.launch.xml publish_rate_hz:=200.0
 ```
 
+The `frame_id` parameter defaults to `imu` and is applied to both `output` and `roll_pitch`. Override it when the robot TF tree uses a different sensor frame:
+
+```sh
+ros2 launch imu_driver mpu6050_driver.launch.xml frame_id:=imu_link
+```
+
 ### Published Topics
 
 | Topic | Type | Description |
@@ -157,6 +163,7 @@ For timing checks on hardware, run the node under expected robot load and watch
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `publish_rate_hz` | double | `100.0` | IMU publish rate in Hz |
+| `frame_id` | string | `imu` | Header frame ID for both `output` and `roll_pitch` messages |
 | `angular_velocity_bias` | double[3] | `[0.0, 0.0, 0.0]` | Static gyro bias to subtract from `angular_velocity` in `rad/s` |
 | `linear_acceleration_bias` | double[3] | `[0.0, 0.0, 0.0]` | Static accelerometer bias to subtract from `linear_acceleration` in `m/s^2` |
 | `angular_velocity_covariance` | double[9] | `[0.0, ...]` | Row-major covariance for `angular_velocity`; all-zero means unknown |
@@ -276,7 +283,7 @@ Before using the IMU in an EKF, SLAM, or control loop, verify:
 - `Latest sample interval sec` is close to `Expected sample interval sec`.
 - `Max sample interval error sec` remains acceptable under normal CPU and I2C load.
 - covariance values are configured when the downstream estimator depends on them.
-- frame IDs are consistent with the robot's TF tree.
+- Configure `frame_id` to match the sensor frame in the robot TF tree.
 
 ### Sensor Configuration
 
