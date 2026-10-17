@@ -137,7 +137,12 @@ void Mpu6050Driver::initializeI2C()
     return;
   }
   // Wake the MPU6050 from sleep mode (SLEEP bit in PWR_MGMT_1 is set on power-on).
-  i2c_->writeReg8(fd_, PWR_MGMT_1, 0x00);
+  const int wake_up_result = i2c_->writeReg8(fd_, PWR_MGMT_1, 0x00);
+  if (wake_up_result != 0) {
+    RCLCPP_ERROR(
+      get_logger(), "I2C wake-up write failed with return code %d", wake_up_result);
+    fd_ = -1;
+  }
 }
 
 void Mpu6050Driver::onTimer()
