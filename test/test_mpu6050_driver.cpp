@@ -132,6 +132,38 @@ static geometry_msgs::msg::Vector3Stamped::SharedPtr spinAndCaptureRollPitch(
   return received;
 }
 
+struct CapturedImuAndRollPitch
+{
+  sensor_msgs::msg::Imu::SharedPtr imu;
+  geometry_msgs::msg::Vector3Stamped::SharedPtr roll_pitch;
+};
+
+static CapturedImuAndRollPitch spinAndCaptureImuAndRollPitch(
+  std::shared_ptr<Mpu6050Driver> node,
+  std::chrono::milliseconds timeout = std::chrono::milliseconds(1000))
+{
+  CapturedImuAndRollPitch received;
+  auto imu_sub = node->create_subscription<sensor_msgs::msg::Imu>(
+    "output", rclcpp::QoS{10},
+    [&received](sensor_msgs::msg::Imu::SharedPtr msg) {
+      received.imu = msg;
+    });
+  auto roll_pitch_sub = node->create_subscription<geometry_msgs::msg::Vector3Stamped>(
+    "roll_pitch", rclcpp::QoS{10},
+    [&received](geometry_msgs::msg::Vector3Stamped::SharedPtr msg) {
+      received.roll_pitch = msg;
+    });
+
+  auto deadline = std::chrono::steady_clock::now() + timeout;
+  while ((!received.imu || !received.roll_pitch) &&
+    std::chrono::steady_clock::now() < deadline)
+  {
+    rclcpp::spin_some(node);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return received;
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // rclcpp::init / shutdown are handled once in main() below.
@@ -671,6 +703,19 @@ TEST(Mpu6050DriverTest, ImuMessageTimestampIsSet)
   const auto & stamp = msg->header.stamp;
   EXPECT_TRUE(stamp.sec != 0 || stamp.nanosec != 0)
     << "Message timestamp must be filled in";
+}
+
+TEST(Mpu6050DriverTest, ImuAndRollPitchUseTheSameSampleTimestamp)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  const auto messages = spinAndCaptureImuAndRollPitch(node);
+  ASSERT_NE(messages.imu, nullptr);
+  ASSERT_NE(messages.roll_pitch, nullptr);
+  EXPECT_EQ(messages.imu->header.stamp.sec, messages.roll_pitch->header.stamp.sec);
+  EXPECT_EQ(messages.imu->header.stamp.nanosec, messages.roll_pitch->header.stamp.nanosec);
 }
 
 TEST(Mpu6050DriverTest, ImuMessageUsesDefaultCovariances)

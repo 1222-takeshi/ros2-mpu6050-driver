@@ -151,8 +151,9 @@ void Mpu6050Driver::onTimer()
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "I2C register read failed, skipping update");
     return;
   }
-  calcRollPitch();
-  imuDataPublish();
+  const auto sample_time = now();
+  calcRollPitch(sample_time);
+  imuDataPublish(sample_time);
 }
 
 bool Mpu6050Driver::updateCurrentGyroData()
@@ -220,10 +221,9 @@ bool Mpu6050Driver::read2data(int fd, unsigned int reg, float * value)
   return true;
 }
 
-void Mpu6050Driver::imuDataPublish()
+void Mpu6050Driver::imuDataPublish(const rclcpp::Time & sample_time)
 {
   sensor_msgs::msg::Imu msg;
-  const auto sample_time = now();
   if (sample_count_ > 0) {
     latest_sample_interval_s_ = (sample_time - last_sample_time_).seconds();
     latest_sample_interval_error_s_ =
@@ -252,13 +252,13 @@ void Mpu6050Driver::imuDataPublish()
   imu_pub_->publish(msg);
 }
 
-void Mpu6050Driver::calcRollPitch()
+void Mpu6050Driver::calcRollPitch(const rclcpp::Time & sample_time)
 {
   const float roll = std::atan2(accel_[1], accel_[2]) * RAD_TO_DEG;
   const float pitch = std::atan2(-accel_[0], std::hypot(accel_[1], accel_[2])) * RAD_TO_DEG;
 
   geometry_msgs::msg::Vector3Stamped msg;
-  msg.header.stamp = now();
+  msg.header.stamp = sample_time;
   msg.header.frame_id = "imu";
   msg.vector.x = roll;
   msg.vector.y = pitch;
