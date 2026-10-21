@@ -26,12 +26,16 @@ import rclpy
 
 
 DEFAULTS = {
+    'frame_id': 'imu',
+    'publish_rate_hz': 100.0,
     'angular_velocity_bias': [0.0] * 3,
     'linear_acceleration_bias': [0.0] * 3,
     'angular_velocity_covariance': [0.0] * 9,
     'linear_acceleration_covariance': [0.0] * 9,
 }
 OVERRIDES = {
+    'frame_id': 'imu_link',
+    'publish_rate_hz': 200.0,
     'angular_velocity_bias': [0.001, -0.002, 0.0005],
     'linear_acceleration_bias': [0.05, -0.03, 0.10],
     'angular_velocity_covariance': [0.0004, 0.0, 0.0, 0.0, 0.0004, 0.0, 0.0, 0.0, 0.0004],
@@ -83,10 +87,17 @@ class TestLaunchParameters(unittest.TestCase):
         self.assertEqual(len(response.values), len(names))
         for name, value in zip(names, response.values):
             with self.subTest(parameter=name):
-                self.assertEqual(value.type, ParameterType.PARAMETER_DOUBLE_ARRAY)
-                self.assertEqual(list(value.double_array_value), expected[name])
+                if isinstance(expected[name], list):
+                    self.assertEqual(value.type, ParameterType.PARAMETER_DOUBLE_ARRAY)
+                    self.assertEqual(list(value.double_array_value), expected[name])
+                elif isinstance(expected[name], str):
+                    self.assertEqual(value.type, ParameterType.PARAMETER_STRING)
+                    self.assertEqual(value.string_value, expected[name])
+                else:
+                    self.assertEqual(value.type, ParameterType.PARAMETER_DOUBLE)
+                    self.assertEqual(value.double_value, expected[name])
 
-    def test_defaults_are_double_arrays(self):
+    def test_default_parameter_types_and_values(self):
         self.assert_parameters('default_case', DEFAULTS)
 
     def test_readme_overrides_reach_node(self):
