@@ -19,6 +19,7 @@ be under the Apache 2 License, as dictated by that
 Use a ROS 2 Humble workspace and run all registered tests, including lint:
 
 ```sh
+export AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS=1
 colcon build --packages-select imu_driver --cmake-args -DBUILD_TESTING=ON
 colcon test --packages-select imu_driver --event-handlers console_cohesion+
 colcon test-result --verbose

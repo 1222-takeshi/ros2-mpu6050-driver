@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-22.04
+    env:
+      # Ubuntu 22.04 ships cppcheck 2.7, which ament otherwise skips.
+      AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS: "1"
     steps:
       - uses: actions/checkout@v4
 
