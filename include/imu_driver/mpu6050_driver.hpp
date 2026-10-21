@@ -37,9 +37,11 @@ public:
     const std::string & node_name,
     const rclcpp::NodeOptions & options,
     II2CInterface * i2c = nullptr);
+  ~Mpu6050Driver() override;
 
 private:
   void initializeI2C();
+  void closeI2C();
   void onTimer();
   bool updateCurrentGyroData();
   bool updateCurrentAccelData();
