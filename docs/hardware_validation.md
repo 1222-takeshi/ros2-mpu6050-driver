@@ -45,8 +45,8 @@
 | モータ出力 | [output設定](https://github.com/1222-takeshi/inverted_pendulum/blob/ef2951064bdc1a0c5f59d699bb90fbb0541617a3/src/balance_bot_bringup/config/real/dynamixel_output.yaml)は10ms write、command timeout 200ms、`torque_on_startup=false`。これらはセンサ停止を検知する保証ではない |
 | 依存ドライバ | [depends.repos](https://github.com/1222-takeshi/inverted_pendulum/blob/ef2951064bdc1a0c5f59d699bb90fbb0541617a3/depends.repos)は本ドライバの`main`をimportする。再現時は取得した実SHAと配備版も記録する |
 
-ユーザーは訂正前の質問でMiniIMU-9 v5の使用を選択したが、倒立repoのBOM・配線・起動実装はMPU6050である。
-倒立側でもMiniIMUへ変更するか、既存MPU6050を使うかを確認中であり、センサの置換は未実施。
+倒立側は既存MPU6050を使用することをユーザー確認済み。
+IMU取付姿勢・内部設定・配備版は引き続き実機と照合する。
 
 実機照合と後続実装が必要な点:
 
