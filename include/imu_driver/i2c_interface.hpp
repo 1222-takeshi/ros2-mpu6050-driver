@@ -30,6 +30,12 @@ public:
 
   /// Write a single byte to the specified register. Returns 0 on success, -1 on failure.
   virtual int writeReg8(int fd, int reg, int data) = 0;
+
+  /// Close an open I2C handle. Backends that do not own a resource may leave this as a no-op.
+  virtual void close(int fd)
+  {
+    (void)fd;
+  }
 };
 
 #endif  // IMU_DRIVER__I2C_INTERFACE_HPP_
