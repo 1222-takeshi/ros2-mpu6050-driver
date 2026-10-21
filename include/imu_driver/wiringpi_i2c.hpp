@@ -38,6 +38,11 @@ public:
   {
     return wiringPiI2CWriteReg8(fd, reg, data);
   }
+
+  void close(int fd) override
+  {
+    (void)wiringPiI2CClose(fd);
+  }
 };
 
 #else
@@ -56,6 +61,7 @@ public:
 
   int readReg8(int /*fd*/, int /*reg*/) override {return 0;}
   int writeReg8(int /*fd*/, int /*reg*/, int /*data*/) override {return -1;}
+  void close(int /*fd*/) override {}
 };
 
 #endif  // HAVE_WIRINGPI
