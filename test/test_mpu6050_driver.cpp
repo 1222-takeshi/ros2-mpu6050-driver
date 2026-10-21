@@ -14,16 +14,6 @@
 
 #include <gtest/gtest.h>
 
-#include "imu_driver/i2c_interface.hpp"
-#include "imu_driver/mpu6050_driver.hpp"
-
-#include <diagnostic_msgs/msg/diagnostic_array.hpp>
-#include <diagnostic_msgs/msg/diagnostic_status.hpp>
-#include <diagnostic_msgs/msg/key_value.hpp>
-#include <geometry_msgs/msg/vector3_stamped.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/imu.hpp>
-
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -32,6 +22,16 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <diagnostic_msgs/msg/key_value.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+
+#include "imu_driver/i2c_interface.hpp"
+#include "imu_driver/mpu6050_driver.hpp"
 
 static constexpr float DEG_TO_RAD = M_PI / 180.0f;
 static constexpr float STANDARD_GRAVITY = 9.80665f;
@@ -45,10 +45,10 @@ class MockI2C : public II2CInterface
 public:
   int setup_return_value = 5;      ///< Simulated valid file descriptor
   std::map<int, int> reg_values;   ///< Values returned by readReg8
-  std::map<int, int> written_regs; ///< Records of writeReg8 calls
+  std::map<int, int> written_regs;  ///< Records of writeReg8 calls
   int write_return_value = 0;   ///< Simulated writeReg8 return code
 
-  int setup(int /*dev_addr*/) override { return setup_return_value; }
+  int setup(int /*dev_addr*/) override {return setup_return_value;}
 
   int readReg8(int /*fd*/, int reg) override
   {
@@ -196,7 +196,8 @@ static rclcpp::NodeOptions optionsWithCovariances(
   const std::vector<double> & linear_acceleration_covariance)
 {
   rclcpp::NodeOptions opts;
-  opts.parameter_overrides({
+  opts.parameter_overrides(
+  {
     rclcpp::Parameter("angular_velocity_covariance", angular_velocity_covariance),
     rclcpp::Parameter("linear_acceleration_covariance", linear_acceleration_covariance),
   });
@@ -208,7 +209,8 @@ static rclcpp::NodeOptions optionsWithBiases(
   const std::vector<double> & linear_acceleration_bias)
 {
   rclcpp::NodeOptions opts;
-  opts.parameter_overrides({
+  opts.parameter_overrides(
+  {
     rclcpp::Parameter("angular_velocity_bias", angular_velocity_bias),
     rclcpp::Parameter("linear_acceleration_bias", linear_acceleration_bias),
   });
@@ -269,7 +271,8 @@ TEST(Mpu6050DriverTest, HandlesI2CSetupFailureGracefully)
   mock.setup_return_value = -1;
   rclcpp::NodeOptions opts;
 
-  ASSERT_NO_THROW({
+  ASSERT_NO_THROW(
+  {
     auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
     // Timer fires with fd==-1; must return early without UB.
     rclcpp::spin_some(node);
@@ -936,11 +939,11 @@ TEST(Mpu6050DriverTest, AllAxesPublishedCorrectly)
   auto msg = spinAndCapture(node);
   ASSERT_NE(msg, nullptr);
   EXPECT_NEAR(msg->linear_acceleration.x, 0.03125f * STANDARD_GRAVITY, 1e-4f);
-  EXPECT_NEAR(msg->linear_acceleration.y, 0.0625f * STANDARD_GRAVITY,  1e-4f);
-  EXPECT_NEAR(msg->linear_acceleration.z, 0.125f * STANDARD_GRAVITY,   1e-4f);
-  EXPECT_NEAR(msg->angular_velocity.x,    1.0f * DEG_TO_RAD,           1e-4f);
-  EXPECT_NEAR(msg->angular_velocity.y,    2.0f * DEG_TO_RAD,           1e-4f);
-  EXPECT_NEAR(msg->angular_velocity.z,    3.0f * DEG_TO_RAD,           1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.y, 0.0625f * STANDARD_GRAVITY, 1e-4f);
+  EXPECT_NEAR(msg->linear_acceleration.z, 0.125f * STANDARD_GRAVITY, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.x, 1.0f * DEG_TO_RAD, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.y, 2.0f * DEG_TO_RAD, 1e-4f);
+  EXPECT_NEAR(msg->angular_velocity.z, 3.0f * DEG_TO_RAD, 1e-4f);
 }
 
 TEST(Mpu6050DriverTest, RollPitchZeroWhenFlat)
