@@ -7,7 +7,7 @@
 
 ## 確認済みの目的
 
-- 既存の倒立二輪台車を使用し、ROS 2上で倒立制御を行う。
+- 既存台車を使ったROS 2上での倒立制御を目標とする。現在の車体が倒立用かは別途確認する。
 - 最初の実機到達点は静止状態での倒立維持とする。
 - IMUデータを車輪オドメトリ等と融合し、自己位置推定のソースにも使用する。
 - 実機が存在することと、時間性能・倒立・推定精度の達成は区別する。
@@ -17,16 +17,44 @@
 | 項目 | 実機での値・根拠 |
 | --- | --- |
 | Raspberry Pi型番・CPU/電源設定 | 未確認 |
-| OS・kernel・ROS 2・RMWの版 | 未確認。リポジトリの基準環境はUbuntu 22.04 / Humble |
-| 台車側ソフトのリポジトリ・commit | 未確認 |
-| モータ・モータドライバ・エンコーダ | 未確認 |
+| OS・kernel・ROS 2・RMWの版 | 実機は未確認。本ドライバの基準環境はUbuntu 22.04 / Humble、台車のDocker定義はJazzy |
+| 台車側ソフトのリポジトリ・commit | `1222-takeshi/diff-drive-robot` / `83e0a298de465038372c1db49f7cabfbb33854fa`。実機に配備した版は未確認 |
+| モータ・モータドライバ・エンコーダ | BOMは型番不明のDCギヤモータ2台とL9110S。エンコーダの記録とコードに差異あり（下記） |
 | MPU6050の取付姿勢・軸・取付位置 | 未確認 |
-| I2Cバス・速度・配線・アドレス | 未確認。ドライバの指定アドレスは0x68 |
+| I2Cバス・速度・配線・アドレス | MPU6050側は未確認。本ドライバは0x68。台車の既存IMUは別型番・Pico接続（下記） |
 | センサ内部の測定周期・フィルタ・測定範囲 | 未確認。換算係数の前提と実設定が一致することを確認する |
-| 姿勢推定・制御・自己位置推定の担当パッケージ | 未確認 |
+| 姿勢推定・制御・自己位置推定の担当パッケージ | 台車に`ddr_base_driver`とPico firmwareあり。倒立用の担当・接続は未確定 |
 | 同時に動かすノードと通常負荷 | 未確認 |
 
 実機の値には、確認方法、確認日時、設定ファイルまたは取得ログの保存先を併記する。
+
+## 台車リポジトリから確認した接続と未解決点
+
+2026-10-21にユーザー指定の`diff-drive-robot/`を確認した。
+以下は上記commitの追跡済みファイルに基づく記録であり、現物・書込み済みfirmware・実測値の確認ではない。
+
+| 項目 | 記録された構成・実装と根拠 |
+| --- | --- |
+| 既存IMU | [BOM](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/hardware/bom.yaml)はMiniIMU-9 v5を所持・接続済みと記録。MPU6050ではなくLSM6DS33とLIS3MDL |
+| 配線・I2C設定 | [pinmap](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/hardware/pinmap.yaml)はPico I2C0 GP8/GP9、アドレス0x6B/0x1E。[firmware設定](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/firmware/pico/src/config.h)は400kHz |
+| IMU読取内容 | [imu.cpp](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/firmware/pico/src/imu.cpp)はgyroとmagを読みyawを計算。加速度の読取はなく、pitch/rollは常に0を代入 |
+| Picoからの報告 | [main.cpp](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/firmware/pico/src/main.cpp)は100ms間隔を設定。`IMU yaw pitch roll gx gy gz`に取得timestamp・sequence・加速度は含まれない。10Hzは設定からの換算で、実測周期ではない |
+| ROS側の取込 | [base_driver_node.py](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/ros2_ws/src/ddr_base_driver/ddr_base_driver/base_driver_node.py)はUSB serialまたはTCPで受信し、yawとgzだけを使用。`imu`へyawのみの姿勢とz角速度を配信し、timestampはホストでのpublish時に付与 |
+| 既存odometry | 同nodeは指令速度を積分し、新鮮なIMU yawがあれば方位に使用（受信時刻から1秒未満）。`ENC`報告をparseしていないため、車輪実測odometryとは区別する |
+| モータ指令・制御 | 同nodeの既定指令送信は5Hz、read timerは20ms。Picoの車輪速度PID設定は100ms、指令timeoutは300ms。倒立制御の周期・欠落許容値としては未承認 |
+| 車体 | [URDF](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/ros2_ws/src/ddr_description/urdf/ddr.urdf.xacro)とBOMは駆動輪2個とキャスターを定義。倒立用への改造か別車体か、重心・慣性・取付軸は未確認 |
+| ROS 2環境 | [Dockerfile](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/docker/Dockerfile)は`ros:jazzy-ros-base`。本ドライバのHumble CI通過はJazzy統合の検証を代替しない |
+
+既存経路は`MiniIMU → Pico → serial/TCP → ddr_base_driver`であり、
+本ドライバの`MPU6050 → ホストI2C → /imu/data_raw`を購読する接続は確認できなかった。
+既存nodeがpublishするtopicをremapするだけでは外部IMUの入力経路にならない。
+利用するセンサ・取得ホスト・推定/制御担当を確定してから、接続とtimestamp・単位・TF・欠落時動作を実装する。
+
+設定間の不整合も実機照合が必要であり、現物の値や動作許可として採用しない。
+
+- [robot.yaml](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/config/robot.yaml)はencoder無効・slit数/車輪寸法未記入、pinmapはLM393到着待ち、BOMは読取センサ未所持。一方firmwareは24slits・車輪径65mmを定義し、encoder/PIDを初期化する。
+- [QWEN_CONTEXT.md](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/QWEN_CONTEXT.md)はPWM上限25%、robot.yamlとfirmwareは約75%。配備版と承認された上限は未確認であり、この文書では変更しない。
+- 台車の[走行評価シナリオ](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/docs/driving-scenarios.md)にはS01〜S04の暫定基準がある。#62の比較条件を決める際の候補とし、静止倒立の合否基準に転用しない。
 
 ## ドライバ側の接続契約
 
