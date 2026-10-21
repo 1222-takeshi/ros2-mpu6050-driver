@@ -40,7 +40,7 @@
 | IMU読取内容 | [imu.cpp](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/firmware/pico/src/imu.cpp)はgyroとmagを読みyawを計算。加速度の読取はなく、pitch/rollは常に0を代入 |
 | Picoからの報告 | [main.cpp](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/firmware/pico/src/main.cpp)は100ms間隔を設定。`IMU yaw pitch roll gx gy gz`に取得timestamp・sequence・加速度は含まれない。10Hzは設定からの換算で、実測周期ではない |
 | ROS側の取込 | [base_driver_node.py](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/ros2_ws/src/ddr_base_driver/ddr_base_driver/base_driver_node.py)はUSB serialまたはTCPで受信し、yawとgzだけを使用。`imu`へyawのみの姿勢とz角速度を配信し、timestampはホストでのpublish時に付与 |
-| 既存odometry | 同nodeは指令速度を積分し、新鮮なIMU yawがあれば方位に使用（受信時刻から1秒未満）。`ENC`報告をparseしていないため、車輪実測odometryとは区別する |
+| 既存odometry | 同nodeは指令速度を積分し、新鮮なIMU yawがあれば方位に使用（受信時刻から1秒未満）。積分dtはホストROS clockの差分、`odom`のstampはpublish時刻。`ENC`報告をparseしていないため、車輪実測odometryとは区別する |
 | モータ指令・制御 | 同nodeの既定指令送信は5Hz、read timerは20ms。Picoの車輪速度PID設定は100ms、指令timeoutは300ms。倒立制御の周期・欠落許容値としては未承認 |
 | 車体 | [URDF](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/ros2_ws/src/ddr_description/urdf/ddr.urdf.xacro)とBOMは駆動輪2個とキャスターを定義。倒立用への改造か別車体か、重心・慣性・取付軸は未確認 |
 | ROS 2環境 | [Dockerfile](https://github.com/1222-takeshi/diff-drive-robot/blob/83e0a298de465038372c1db49f7cabfbb33854fa/docker/Dockerfile)は`ros:jazzy-ros-base`。本ドライバのHumble CI通過はJazzy統合の検証を代替しない |
