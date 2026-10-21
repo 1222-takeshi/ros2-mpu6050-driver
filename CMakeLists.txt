@@ -55,6 +55,9 @@ if(BUILD_TESTING)
     diagnostic_msgs
     diagnostic_updater
   )
+
+  find_package(launch_testing_ament_cmake REQUIRED)
+  add_launch_test(test/test_launch_parameters.py TIMEOUT 60)
 endif()
 
 ament_auto_package(
