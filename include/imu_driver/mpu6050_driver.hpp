@@ -77,6 +77,7 @@ private:
   double latest_sample_interval_error_s_ = 0.0;
   double max_sample_interval_error_s_ = 0.0;
   std::size_t sample_count_ = 0;
+  std::size_t rejected_invalid_sample_count_ = 0;
   bool latest_sample_read_ok_ = true;
   bool latest_sample_valid_ = false;
   bool sample_interval_available_ = false;

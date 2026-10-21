@@ -23,6 +23,7 @@
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <rclcpp/timer.hpp>
 
+#include "imu_driver/detail/sample_validation.hpp"
 #include "imu_driver/mpu6050_driver.hpp"
 #include "imu_driver/wiringpi_i2c.hpp"
 
@@ -163,6 +164,13 @@ void Mpu6050Driver::onTimer()
       *get_clock(), 5000, "I2C register read failed, skipping update");
     return;
   }
+  latest_sample_valid_ = isLatestSampleValid();
+  if (!latest_sample_valid_) {
+    ++rejected_invalid_sample_count_;
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 5000, "Invalid IMU sample rejected, skipping publication");
+    return;
+  }
   const auto sample_time = now();
   calcRollPitch(sample_time);
   imuDataPublish(sample_time);
@@ -247,7 +255,6 @@ void Mpu6050Driver::imuDataPublish(const rclcpp::Time & sample_time)
   }
 
   last_sample_time_ = sample_time;
-  latest_sample_valid_ = isLatestSampleValid();
   ++sample_count_;
 
   msg.header.stamp = last_sample_time_;
@@ -324,6 +331,7 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
   stat.add("Configured publish_rate_hz", publish_rate_hz_);
   stat.add("Effective publish_rate_hz", effective_publish_rate_hz_);
   stat.add("Published samples", sample_count_);
+  stat.add("Rejected invalid samples", rejected_invalid_sample_count_);
 
   if (fd_ == -1) {
     stat.summary(DiagnosticStatus::ERROR, "I2C not initialized");
@@ -334,13 +342,11 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
     stat.summary(DiagnosticStatus::ERROR, "I2C read failed");
     return;
   }
-  if (sample_count_ == 0) {
-    stat.summary(DiagnosticStatus::WARN, "No IMU samples published yet");
-    return;
+  double sample_age_s = 0.0;
+  if (sample_count_ > 0) {
+    sample_age_s = (now() - last_sample_time_).seconds();
+    stat.add("Latest sample age sec", sample_age_s);
   }
-
-  const double sample_age_s = (now() - last_sample_time_).seconds();
-  stat.add("Latest sample age sec", sample_age_s);
   stat.add("Latest sample valid", latest_sample_valid_);
   stat.add("Expected sample interval sec", expected_sample_interval_s_);
   stat.add("Sample interval tolerance sec", sample_interval_tolerance_s_);
@@ -353,8 +359,10 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
     sample_interval_available_ &&
     latest_sample_interval_error_s_ > sample_interval_tolerance_s_;
 
-  if (!latest_sample_valid_) {
-    stat.summary(DiagnosticStatus::WARN, "Latest IMU sample outside expected range");
+  if (!latest_sample_valid_ && rejected_invalid_sample_count_ > 0) {
+    stat.summary(DiagnosticStatus::WARN, "Invalid IMU sample rejected");
+  } else if (sample_count_ == 0) {
+    stat.summary(DiagnosticStatus::WARN, "No IMU samples published yet");
   } else if (sample_age_s > expected_sample_interval_s_ * STALE_SAMPLE_PERIOD_MULTIPLIER) {
     stat.summary(DiagnosticStatus::WARN, "No recent IMU sample");
   } else if (interval_jitter_above_tolerance) {
@@ -366,17 +374,7 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
 
 bool Mpu6050Driver::isLatestSampleValid() const
 {
-  for (const auto value : accel_) {
-    if (!std::isfinite(value) || std::fabs(value) > MAX_ACCEL_MPS2) {
-      return false;
-    }
-  }
-  for (const auto value : gyro_) {
-    if (!std::isfinite(value) || std::fabs(value) > MAX_GYRO_RADPS) {
-      return false;
-    }
-  }
-  return true;
+  return imu_driver::detail::isImuSampleValid(accel_, gyro_, MAX_ACCEL_MPS2, MAX_GYRO_RADPS);
 }
 
 std::array<double, 3> Mpu6050Driver::parseBiasParameter(
