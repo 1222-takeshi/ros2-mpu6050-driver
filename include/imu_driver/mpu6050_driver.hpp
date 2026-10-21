@@ -43,8 +43,8 @@ private:
   void onTimer();
   bool updateCurrentGyroData();
   bool updateCurrentAccelData();
-  void calcRollPitch();
-  void imuDataPublish();
+  void calcRollPitch(const rclcpp::Time & sample_time);
+  void imuDataPublish(const rclcpp::Time & sample_time);
   void checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
   void checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper & stat);
   bool isLatestSampleValid() const;
