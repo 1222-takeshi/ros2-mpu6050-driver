@@ -15,18 +15,18 @@
 #ifndef IMU_DRIVER__MPU6050_DRIVER_HPP_
 #define IMU_DRIVER__MPU6050_DRIVER_HPP_
 
-#include "imu_driver/i2c_interface.hpp"
+#include <array>
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
-#include <array>
-#include <cstddef>
-#include <memory>
-#include <string>
-#include <vector>
+#include "imu_driver/i2c_interface.hpp"
 
 class Mpu6050Driver : public rclcpp::Node
 {

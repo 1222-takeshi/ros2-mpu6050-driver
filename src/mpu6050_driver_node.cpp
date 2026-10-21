@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "imu_driver/mpu6050_driver.hpp"
-#include "imu_driver/wiringpi_i2c.hpp"
-
-#include <diagnostic_msgs/msg/diagnostic_status.hpp>
-#include <rclcpp/timer.hpp>
-
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -25,6 +19,12 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <rclcpp/timer.hpp>
+
+#include "imu_driver/mpu6050_driver.hpp"
+#include "imu_driver/wiringpi_i2c.hpp"
 
 static constexpr unsigned int ACCEL_X_OUT = 0x3b;
 static constexpr unsigned int ACCEL_Y_OUT = 0x3d;
@@ -158,7 +158,9 @@ void Mpu6050Driver::onTimer()
   }
   latest_sample_read_ok_ = updateCurrentGyroData() && updateCurrentAccelData();
   if (!latest_sample_read_ok_) {
-    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "I2C register read failed, skipping update");
+    RCLCPP_WARN_THROTTLE(
+      get_logger(),
+      *get_clock(), 5000, "I2C register read failed, skipping update");
     return;
   }
   calcRollPitch();

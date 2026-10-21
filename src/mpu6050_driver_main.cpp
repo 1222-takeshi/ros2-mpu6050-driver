@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "imu_driver/mpu6050_driver.hpp"
+#include <memory>
 
 #include <rclcpp/rclcpp.hpp>
 
-#include <memory>
+#include "imu_driver/mpu6050_driver.hpp"
 
 int main(int argc, char ** argv)
 {

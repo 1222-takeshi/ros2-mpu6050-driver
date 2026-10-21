@@ -53,8 +53,7 @@ jobs:
           source install/setup.bash
           colcon test \
             --packages-select imu_driver \
-            --event-handlers console_cohesion+ \
-            --ctest-args -R test_mpu6050_driver
+            --event-handlers console_cohesion+
           colcon test-result --verbose
 
       - name: Upload test results
