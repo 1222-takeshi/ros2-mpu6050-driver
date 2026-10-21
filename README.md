@@ -5,6 +5,9 @@ ROS2 driver for the MPU6050 IMU sensor (accelerometer + gyroscope), designed for
 Development goals and validation milestones for localization and ROS 2 balancing control
 are described in the [development roadmap](ROADMAP.md).
 
+Record the target robot and acceptance criteria in the [hardware validation worksheet](docs/hardware_validation.md)
+before assessing localization or ROS 2 balancing performance.
+
 ## Tested Environment
 
 | Component | Version |
