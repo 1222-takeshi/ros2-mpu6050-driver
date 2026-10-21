@@ -16,7 +16,7 @@ Raspberry Pi上でMPU6050を安定運用し、異常とデータの鮮度を観�
 
 | 段階 | 対象 | 完了条件・次へ進む条件 |
 | --- | --- | --- |
-| 1. 既存PRの整理 | [#50](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/50) / [PR #51](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/51): I2C初期化失敗、[#44](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/44) / [PR #45](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/45): frame_id、[#47](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/47) / [PR #48](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/48): launch設定、[#58](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/58) / [PR #52](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/52): timestamp | 2名以上のレビュー、Humbleのbuild/test、必要な静的解析を通過して統合する。launch設定は実起動後の型・値まで確認する。統合後にも全体を検証する。 |
+| 1. 既存PRの整理 | [#50](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/50) / [PR #51](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/51): I2C初期化失敗、[#44](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/44) / [PR #45](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/45): frame_id、[#47](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/47) / [PR #48](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/48): launch設定、[#58](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/58) / [PR #52](https://github.com/1222-takeshi/ros2-mpu6050-driver/pull/52): timestamp | 2名以上のレビューとHumbleのbuild/testを通過する。静的解析は実行して変更前と比較し、新規違反を追加しない。launch設定は実起動後の型・値まで確認し、統合後にも全体を検証する。 |
 | 1a. 静的解析の整備 | [#59](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/59) | 変更前から存在するlint違反を解消し、CIで静的解析の再発を検出する。機能変更と分離して進める。 |
 | 2. 異常データの扱い | [#54](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/54) | 無効サンプルのpublish抑止、診断、拒否数、正常復帰、鮮度・周期計測の契約を決め、正常・境界・異常・復帰をmockで検証する。実機の故障時確認は別途記録する。 |
 | 3. 変更前の実機測定 | [#41](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/41) | 通常ロボット負荷で100Hz目標の周期・jitter・鮮度とdiagnosticsを記録する。Pi/OS/ROS、I2C設定、負荷、実行コマンド、commit SHA、測定時間を残す。 |
@@ -27,6 +27,10 @@ Raspberry Pi上でMPU6050を安定運用し、異常とデータの鮮度を観�
 #45と#48は同じlaunchファイルを変更するため、統合時に全引数が残ることを確認する。
 重複する[#49](https://github.com/1222-takeshi/ros2-mpu6050-driver/issues/49)は#50へ集約し、
 I2C初期化失敗の修正を二重実装しない。
+
+段階1では、mainの固定snapshotでも再現した既存lint失敗45件を#59で追跡する。
+静的解析全体の成功とは報告せず、同じ条件で失敗箇所・内容が増えていないことを確認する。
+既存違反の解消とCIでの継続検証は段階1aの完了条件とする。
 
 ## 性能・互換性の判断
 
