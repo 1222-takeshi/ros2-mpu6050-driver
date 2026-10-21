@@ -54,8 +54,8 @@ public:
     return -1;
   }
 
-  int readReg8(int /*fd*/, int /*reg*/) override { return 0; }
-  int writeReg8(int /*fd*/, int /*reg*/, int /*data*/) override { return -1; }
+  int readReg8(int /*fd*/, int /*reg*/) override {return 0;}
+  int writeReg8(int /*fd*/, int /*reg*/, int /*data*/) override {return -1;}
 };
 
 #endif  // HAVE_WIRINGPI

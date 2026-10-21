@@ -1,8 +1,21 @@
 # -*- coding: utf-8 -*-
+# Copyright 2021 Takeshi Miura
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
 
 import smbus
-import math
-from time import sleep
 
 DEV_ADDR = 0x68
 
@@ -15,7 +28,7 @@ GYRO_YOUT = 0x45
 GYRO_ZOUT = 0x47
 
 PWR_MGMT_1 = 0x6b
-PWR_MGMT_2 = 0x6c   
+PWR_MGMT_2 = 0x6c
 
 bus = smbus.SMBus(1)
 bus.write_byte_data(DEV_ADDR, PWR_MGMT_1, 0)
@@ -23,9 +36,10 @@ bus.write_byte_data(DEV_ADDR, PWR_MGMT_1, 0)
 
 def read_word(adr):
     high = bus.read_byte_data(DEV_ADDR, adr)
-    low = bus.read_byte_data(DEV_ADDR, adr+1)
+    low = bus.read_byte_data(DEV_ADDR, adr + 1)
     val = (high << 8) + low
     return val
+
 
 # Sensor data read
 def read_word_sensor(adr):
@@ -43,16 +57,16 @@ def get_temp():
 
 
 def getGyro():
-    x = read_word_sensor(GYRO_XOUT)/ 131.0
-    y = read_word_sensor(GYRO_YOUT)/ 131.0
-    z = read_word_sensor(GYRO_ZOUT)/ 131.0
+    x = read_word_sensor(GYRO_XOUT) / 131.0
+    y = read_word_sensor(GYRO_YOUT) / 131.0
+    z = read_word_sensor(GYRO_ZOUT) / 131.0
     return [x, y, z]
 
 
 def getAccel():
-    x = read_word_sensor(ACCEL_XOUT)/ 16384.0
-    y= read_word_sensor(ACCEL_YOUT)/ 16384.0
-    z= read_word_sensor(ACCEL_ZOUT)/ 16384.0
+    x = read_word_sensor(ACCEL_XOUT) / 16384.0
+    y = read_word_sensor(ACCEL_YOUT) / 16384.0
+    z = read_word_sensor(ACCEL_ZOUT) / 16384.0
     return [x, y, z]
 
 
@@ -60,11 +74,11 @@ while 1:
     ax, ay, az = getAccel()
     gx, gy, gz = getGyro()
 
-    #print ('{:4.3f},{:4.3f}, {:4.3f}, {:4.3f},{:4.3f}, {:4.3f},' .format(gx, gy, gz, ax, ay, az))
-    roll = math.atan(ay/az) * 57.324
-    pitch = math.atan(-ax / math.sqrt( ay* ay+ az*az ) ) * 57.324
+    # print('{:4.3f},{:4.3f}, {:4.3f}, {:4.3f},{:4.3f}, {:4.3f},'.format(gx, gy, gz, ax, ay, az))
+    roll = math.atan(ay / az) * 57.324
+    pitch = math.atan(-ax / math.sqrt(ay * ay + az * az)) * 57.324
 
-    #pitch = math.atan(-ax / (ay*math.sin(roll) + az*math.cos(roll)))
+    # pitch = math.atan(-ax / (ay * math.sin(roll) + az * math.cos(roll)))
 
     # ↓のprint()分が間違っていたため修正いたしました。申し訳ありません
     print('{:4.3f}, {:4.3f},' .format(pitch, roll))
