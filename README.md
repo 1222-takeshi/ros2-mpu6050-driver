@@ -2,6 +2,8 @@
 
 ROS2 driver for the MPU6050 IMU sensor (accelerometer + gyroscope), designed for use with a Raspberry Pi over I2C.
 
+Development goals, priorities, and validation milestones are proposed in the [development roadmap](ROADMAP.md).
+
 ## Tested Environment
 
 | Component | Version |
