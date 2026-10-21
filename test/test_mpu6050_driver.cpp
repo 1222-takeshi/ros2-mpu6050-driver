@@ -30,6 +30,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
+#include "imu_driver/detail/sample_validation.hpp"
 #include "imu_driver/i2c_interface.hpp"
 #include "imu_driver/mpu6050_driver.hpp"
 
@@ -47,11 +48,15 @@ public:
   std::map<int, int> reg_values;   ///< Values returned by readReg8
   std::map<int, int> written_regs;  ///< Records of writeReg8 calls
   int write_return_value = 0;   ///< Simulated writeReg8 return code
+  int sample_read_attempts = 0;
 
   int setup(int /*dev_addr*/) override {return setup_return_value;}
 
   int readReg8(int /*fd*/, int reg) override
   {
+    if (reg == 0x43) {
+      ++sample_read_attempts;
+    }
     auto it = reg_values.find(reg);
     return (it != reg_values.end()) ? it->second : 0;
   }
@@ -477,6 +482,7 @@ TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenSampleReadFails)
     << "Expected a data diagnostic status";
   EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
   EXPECT_EQ(status.message, "I2C read failed");
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Rejected invalid samples"), 0.0);
 }
 
 TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenRegisterReadOutOfRange)
@@ -491,6 +497,113 @@ TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenRegisterReadOutOfRange)
     << "Expected a data diagnostic status";
   EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
   EXPECT_EQ(status.message, "I2C read failed");
+}
+
+TEST(ImuSampleValidationTest, AcceptsInclusiveLimitsAndRejectsValuesBeyondThem)
+{
+  std::array<double, 3> accel{24.0, -24.0, 0.0};
+  std::array<double, 3> gyro{4.0, -4.0, 0.0};
+  EXPECT_TRUE(imu_driver::detail::isImuSampleValid(accel, gyro, 24.0, 4.0));
+  accel[0] = std::nextafter(24.0, 25.0);
+  EXPECT_FALSE(imu_driver::detail::isImuSampleValid(accel, gyro, 24.0, 4.0));
+  accel[0] = 24.0;
+  gyro[1] = std::nextafter(-4.0, -5.0);
+  EXPECT_FALSE(imu_driver::detail::isImuSampleValid(accel, gyro, 24.0, 4.0));
+}
+
+TEST(ImuSampleValidationTest, RejectsNonFiniteValuesOnEveryAxis)
+{
+  for (const double invalid : {std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()})
+  {
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+      std::array<double, 3> values{};
+      const std::array<double, 3> zero{};
+      values[axis] = invalid;
+      EXPECT_FALSE(imu_driver::detail::isImuSampleValid(values, zero, 24.0, 4.0));
+      EXPECT_FALSE(imu_driver::detail::isImuSampleValid(zero, values, 24.0, 4.0));
+    }
+  }
+}
+
+TEST(Mpu6050DriverTest, RejectsInvalidSamplesBeforeFirstPublication)
+{
+  for (const bool gyro_invalid : {true, false}) {
+    MockI2C mock;
+    const std::vector<double> zero_bias{0.0, 0.0, 0.0};
+    auto opts = optionsWithBiases(
+      gyro_invalid ? std::vector<double>{10.0, 0.0, 0.0} : zero_bias,
+      gyro_invalid ? zero_bias : std::vector<double>{30.0, 0.0, 0.0});
+    auto node = std::make_shared<Mpu6050Driver>(
+      testNodeName() + (gyro_invalid ? "_gyro" : "_accel"), opts, &mock);
+
+    const auto messages = spinAndCaptureImuAndRollPitch(node, std::chrono::milliseconds(200));
+    EXPECT_EQ(messages.imu, nullptr);
+    EXPECT_EQ(messages.roll_pitch, nullptr);
+
+    diagnostic_msgs::msg::DiagnosticStatus status;
+    ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status));
+    EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::WARN);
+    EXPECT_EQ(status.message, "Invalid IMU sample rejected");
+    EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Published samples"), 0.0);
+    EXPECT_GT(diagnosticValueAsDouble(status, "Rejected invalid samples"), 0.0);
+    EXPECT_EQ(findDiagnosticValue(status, "Latest sample age sec"), nullptr);
+  }
+}
+
+TEST(Mpu6050DriverTest, RejectedSamplesPreserveFreshnessAndRecover)
+{
+  MockI2C mock;
+  mock.reg_values[0x3b] = 0x40;  // 1g minus bias remains within the accepted range.
+  auto node = std::make_shared<Mpu6050Driver>(
+    testNodeName(), optionsWithBiases({0.0, 0.0, 0.0}, {30.0, 0.0, 0.0}), &mock);
+  ASSERT_NE(spinAndCapture(node), nullptr);
+  ASSERT_NE(spinAndCapture(node), nullptr);
+
+  const auto reads_before_rejection = mock.sample_read_attempts;
+  mock.reg_values[0x3b] = 0x00;  // Corrected acceleration becomes -30 m/s^2.
+  const auto rejected = spinAndCaptureImuAndRollPitch(node, std::chrono::milliseconds(200));
+  EXPECT_EQ(rejected.imu, nullptr);
+  EXPECT_EQ(rejected.roll_pitch, nullptr);
+
+  diagnostic_msgs::msg::DiagnosticStatus first;
+  diagnostic_msgs::msg::DiagnosticStatus second;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &first));
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &second));
+  EXPECT_EQ(second.message, "Invalid IMU sample rejected");
+  const double published = diagnosticValueAsDouble(second, "Published samples");
+  EXPECT_GT(published, 0.0);
+  EXPECT_DOUBLE_EQ(published, diagnosticValueAsDouble(first, "Published samples"));
+  EXPECT_DOUBLE_EQ(
+    diagnosticValueAsDouble(second, "Latest sample interval sec"),
+    diagnosticValueAsDouble(first, "Latest sample interval sec"));
+  EXPECT_DOUBLE_EQ(
+    diagnosticValueAsDouble(second, "Max sample interval error sec"),
+    diagnosticValueAsDouble(first, "Max sample interval error sec"));
+  EXPECT_GT(
+    diagnosticValueAsDouble(second, "Rejected invalid samples"),
+    diagnosticValueAsDouble(first, "Rejected invalid samples"));
+  EXPECT_GT(
+    diagnosticValueAsDouble(second, "Latest sample age sec"),
+    diagnosticValueAsDouble(first, "Latest sample age sec"));
+
+  const auto rejected_attempts = mock.sample_read_attempts - reads_before_rejection;
+  mock.reg_values[0x3b] = 0x40;
+  const auto recovered = spinAndCaptureImuAndRollPitch(node);
+  ASSERT_NE(recovered.imu, nullptr);
+  ASSERT_NE(recovered.roll_pitch, nullptr);
+  EXPECT_TRUE(std::isfinite(recovered.imu->linear_acceleration.x));
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status));
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::OK);
+  EXPECT_EQ(status.message, "Data OK");
+  EXPECT_GT(diagnosticValueAsDouble(status, "Published samples"), published);
+  EXPECT_GT(
+    diagnosticValueAsDouble(status, "Max sample interval error sec"),
+    diagnosticValueAsDouble(second, "Max sample interval error sec"));
+  EXPECT_DOUBLE_EQ(
+    diagnosticValueAsDouble(status, "Rejected invalid samples"),
+    static_cast<double>(rejected_attempts));
 }
 
 TEST(Mpu6050DriverTest, FallsBackToDefaultPublishRateWhenZero)

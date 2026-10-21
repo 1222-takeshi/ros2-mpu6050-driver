@@ -138,7 +138,7 @@ The driver publishes two diagnostic statuses:
 | Status | OK | WARN | ERROR |
 |--------|----|------|-------|
 | `Hardware Status` | I2C is initialized, temperature is normal, and all axes are active | Chip temperature is above 70°C or one or more axes are in standby | I2C is not initialized, an I2C register read fails, or chip temperature is above 85°C |
-| `Data Status` | IMU samples are recent, within range, and on interval | No sample has been published yet, the latest sample is stale, outside the expected range, or has high interval jitter | I2C is not initialized or the latest sample read failed |
+| `Data Status` | IMU samples are recent, within range, and on interval | No sample has been published yet, the latest sample is stale, an invalid sample was rejected, or there is high interval jitter | I2C is not initialized or the latest sample read failed |
 
 You can inspect the diagnostics with:
 
@@ -160,6 +160,26 @@ ros2 topic echo /diagnostics
 
 For timing checks on hardware, run the node under expected robot load and watch
 `Latest sample interval error sec` and `Max sample interval error sec` in `/diagnostics`.
+
+### Invalid Samples and Recovery
+
+After SI conversion and bias correction, every acceleration axis must be finite and within
+the existing ±2.5g validity limit, and every angular velocity axis within ±260 deg/s
+(compared in `m/s^2` and `rad/s`). The limits are inclusive.
+
+An invalid sample is dropped from both `output` and `roll_pitch`; the driver does not
+republish an older sample. `Data Status` reports WARN with `Invalid IMU sample rejected`.
+`Rejected invalid samples` counts rejected, successfully read samples since startup;
+I2C read failures are reported separately as ERROR and do not increment this counter.
+
+`Published samples`, the last published timestamp, and interval fields advance only for
+valid samples. `Latest sample age sec` therefore keeps increasing during rejection, and
+is absent before the first valid publication. The next valid sample resumes publishing
+immediately; its interval includes the gap, so interval jitter can remain WARN until the
+next regular sample. The rejection counter is retained after recovery.
+
+Consumers must detect missing or stale data and apply their own control stop/recovery
+policy; suppressing publication alone does not stop a robot controller.
 
 ### Parameters
 
