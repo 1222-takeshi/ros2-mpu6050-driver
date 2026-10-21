@@ -64,6 +64,7 @@ private:
   std::array<double, 3> gyro_{};
   std::array<double, 3> accel_{};
   std::array<double, 3> angular_velocity_bias_{};
+  std::string frame_id_ = "imu";
   std::array<double, 3> linear_acceleration_bias_{};
   std::array<double, 9> angular_velocity_covariance_{};
   std::array<double, 9> linear_acceleration_covariance_{};
