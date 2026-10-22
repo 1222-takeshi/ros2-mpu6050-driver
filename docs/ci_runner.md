@@ -4,9 +4,14 @@
 labelsは `self-hosted / Linux / ARM64 / dgx-spark`。倒立repositoryのrunnerと
 ディレクトリ・user serviceを分け、同一hostでもROS通信はcontainerのloopbackへ制限する。
 
-public repositoryなので、main pushと同じrepository内のPRだけを実行する。
-fork PRのjobはskipし、`pull_request_target` で外部コードを実行しない。
-外部からの変更はreview後にmaintainer管理branchへ取り込み、通常のPRとして検証する。
+public repositoryなので、GitHub側のfork workflow承認設定を
+`all_external_contributors` にする。YAMLの条件はPR自身が変更できるため、
+サーバー側の設定も必須である。fork workflowを承認してこのrunnerへ流さない。
+YAMLでもfork PRをskipし、`pull_request_target` は使用しない。
+外部変更はreview後にmaintainer管理branchへ取り込み、通常のPRとして検証する。
+repositoryへのwrite権限はこのhostでコードを実行できる信頼境界として扱う。
+移行時にwrite/admin権限を持つのはowner `1222-takeshi` のみであることを確認した。
+collaboratorや承認設定を変更するときは、この信頼境界を再確認する。
 
 workflowはdigest固定のJammy containerにHumbleを導入し、既存の全登録testとlintを実行する。
 workspaceはsource checkoutの外の一意なRUNNER_TEMP配下へ置く。
