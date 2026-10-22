@@ -6,10 +6,23 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    # Public fork PRs must not execute on a host with a persistent runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, ARM64, dgx-spark]
+    timeout-minutes: 30
+    container:
+      image: rostooling/setup-ros-docker@sha256:ae24d1bd0de2d211c87aed13404b1d06c089c1c581f64d943cf61c59f26b1cce
+    defaults:
+      run:
+        shell: bash
     env:
+      ROS_LOCALHOST_ONLY: "1"
+      ROS_DISTRO: humble
       # Ubuntu 22.04 ships cppcheck 2.7, which ament otherwise skips.
       AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS: "1"
     steps:
@@ -27,24 +40,25 @@ jobs:
       # Python modules (e.g. ament_cmake_test).
       - name: Setup workspace and export environment
         run: |
-          mkdir -p $HOME/ros_ws/src
-          ln -s ${{ github.workspace }} $HOME/ros_ws/src/imu_driver
+          TASK_ROS_WS="$(mktemp -d "${RUNNER_TEMP}/imu_ws.XXXXXX")"
+          echo "ROS_WS=${TASK_ROS_WS}" >> "$GITHUB_ENV"
+          mkdir -p "${TASK_ROS_WS}/src"
+          ln -s "$GITHUB_WORKSPACE" "${TASK_ROS_WS}/src/imu_driver"
           source /opt/ros/humble/setup.bash
-          echo "PYTHONPATH=$PYTHONPATH"           >> $GITHUB_ENV
-          echo "AMENT_PREFIX_PATH=$AMENT_PREFIX_PATH" >> $GITHUB_ENV
-          echo "ROS_WS=$HOME/ros_ws"             >> $GITHUB_ENV
+          echo "PYTHONPATH=$PYTHONPATH" >> "$GITHUB_ENV"
+          echo "AMENT_PREFIX_PATH=$AMENT_PREFIX_PATH" >> "$GITHUB_ENV"
 
       - name: Install ROS dependencies
         run: |
           source /opt/ros/humble/setup.bash
           rosdep update
-          cd $ROS_WS
+          cd "$ROS_WS"
           rosdep install --from-paths src --ignore-src -y
 
       - name: Build
         run: |
           source /opt/ros/humble/setup.bash
-          cd $ROS_WS
+          cd "$ROS_WS"
           colcon build \
             --packages-select imu_driver \
             --cmake-args -DBUILD_TESTING=ON
@@ -52,7 +66,7 @@ jobs:
       - name: Test
         run: |
           source /opt/ros/humble/setup.bash
-          cd $ROS_WS
+          cd "$ROS_WS"
           source install/setup.bash
           colcon test \
             --packages-select imu_driver \
@@ -65,3 +79,10 @@ jobs:
         with:
           name: test-results
           path: ${{ env.ROS_WS }}/build/imu_driver/test_results/
+
+      - name: Clean temporary workspace
+        if: always()
+        run: |
+          if [[ -n "${ROS_WS:-}" && "$ROS_WS" == "$RUNNER_TEMP"/imu_ws.* ]]; then
+            rm -rf -- "$ROS_WS"
+          fi
