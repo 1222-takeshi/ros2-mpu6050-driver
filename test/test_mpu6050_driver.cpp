@@ -49,6 +49,8 @@ public:
   std::map<int, int> written_regs;  ///< Records of writeReg8 calls
   int write_return_value = 0;   ///< Simulated writeReg8 return code
   int sample_read_attempts = 0;
+  int close_calls = 0;           ///< Number of close calls
+  int closed_fd = -1;            ///< Last closed file descriptor
 
   int setup(int /*dev_addr*/) override {return setup_return_value;}
 
@@ -65,6 +67,12 @@ public:
   {
     written_regs[reg] = data;
     return write_return_value;
+  }
+
+  void close(int fd) override
+  {
+    ++close_calls;
+    closed_fd = fd;
   }
 };
 
@@ -299,18 +307,84 @@ TEST(Mpu6050DriverTest, HandlesWakeUpWriteFailureAsInitializationFailure)
 {
   MockI2C mock;
   mock.write_return_value = -1;
-  rclcpp::NodeOptions opts;
-  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+  {
+    rclcpp::NodeOptions opts;
+    auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
 
-  EXPECT_EQ(mock.written_regs.at(0x6B), 0);
-  EXPECT_EQ(spinAndCapture(node, std::chrono::milliseconds(100)), nullptr)
-    << "A failed wake-up write must prevent IMU publishing";
+    EXPECT_EQ(mock.written_regs.at(0x6B), 0);
+    EXPECT_EQ(mock.close_calls, 1);
+    EXPECT_EQ(mock.closed_fd, 5);
+    EXPECT_EQ(spinAndCapture(node, std::chrono::milliseconds(100)), nullptr)
+      << "A failed wake-up write must prevent IMU publishing";
 
-  diagnostic_msgs::msg::DiagnosticStatus status;
-  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
-    << "Expected a hardware diagnostic status";
-  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
-  EXPECT_EQ(status.message, "I2C not initialized");
+    diagnostic_msgs::msg::DiagnosticStatus status;
+    ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status))
+      << "Expected a hardware diagnostic status";
+    EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
+    EXPECT_EQ(status.message, "I2C not initialized");
+  }
+  EXPECT_EQ(mock.close_calls, 1)
+    << "Wake-up failure must not cause a second close during destruction";
+}
+
+TEST(Mpu6050DriverTest, ClosesI2CHandleOnDestruction)
+{
+  MockI2C mock;
+  {
+    rclcpp::NodeOptions opts;
+    auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+    ASSERT_NE(node, nullptr);
+    EXPECT_EQ(mock.close_calls, 0);
+  }
+  EXPECT_EQ(mock.close_calls, 1);
+  EXPECT_EQ(mock.closed_fd, 5);
+}
+
+TEST(Mpu6050DriverTest, ClosesValidZeroFileDescriptor)
+{
+  MockI2C mock;
+  mock.setup_return_value = 0;
+  {
+    rclcpp::NodeOptions opts;
+    auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+    ASSERT_NE(node, nullptr);
+  }
+  EXPECT_EQ(mock.close_calls, 1);
+  EXPECT_EQ(mock.closed_fd, 0);
+}
+
+TEST(Mpu6050DriverTest, ClosesHandleAfterExecutorStopsAndRemovesNode)
+{
+  MockI2C mock;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), rclcpp::NodeOptions{}, &mock);
+  {
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(node);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (mock.sample_read_attempts == 0 && std::chrono::steady_clock::now() < deadline) {
+      executor.spin_some();
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    EXPECT_GT(mock.sample_read_attempts, 0);
+    executor.cancel();
+    executor.remove_node(node);
+  }
+  EXPECT_EQ(mock.close_calls, 0);
+  node.reset();
+  EXPECT_EQ(mock.close_calls, 1);
+  EXPECT_EQ(mock.closed_fd, 5);
+}
+
+TEST(Mpu6050DriverTest, DoesNotCloseAfterI2CSetupFailure)
+{
+  MockI2C mock;
+  mock.setup_return_value = -1;
+  {
+    rclcpp::NodeOptions opts;
+    auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+    ASSERT_NE(node, nullptr);
+  }
+  EXPECT_EQ(mock.close_calls, 0);
 }
 
 TEST(Mpu6050DriverTest, PublishesHardwareDiagnosticOk)

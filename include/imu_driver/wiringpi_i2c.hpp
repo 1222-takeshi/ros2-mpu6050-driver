@@ -18,6 +18,7 @@
 #include "imu_driver/i2c_interface.hpp"
 
 #ifdef HAVE_WIRINGPI
+#include <unistd.h>
 #include <wiringPiI2C.h>
 
 /// Production implementation of II2CInterface using the wiringPi library.
@@ -38,6 +39,11 @@ public:
   {
     return wiringPiI2CWriteReg8(fd, reg, data);
   }
+
+  void close(int fd) override
+  {
+    (void)::close(fd);
+  }
 };
 
 #else
@@ -56,6 +62,7 @@ public:
 
   int readReg8(int /*fd*/, int /*reg*/) override {return 0;}
   int writeReg8(int /*fd*/, int /*reg*/, int /*data*/) override {return -1;}
+  void close(int /*fd*/) override {}
 };
 
 #endif  // HAVE_WIRINGPI

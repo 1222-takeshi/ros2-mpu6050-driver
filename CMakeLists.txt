@@ -56,6 +56,14 @@ if(BUILD_TESTING)
     diagnostic_updater
   )
 
+  # Compile the production header even on CI hosts without wiringPi hardware.
+  ament_add_gtest(test_wiringpi_i2c test/test_wiringpi_i2c.cpp)
+  target_compile_definitions(test_wiringpi_i2c PRIVATE HAVE_WIRINGPI)
+  target_include_directories(test_wiringpi_i2c PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/wiringpi
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+
   find_package(launch_testing_ament_cmake REQUIRED)
   add_launch_test(test/test_launch_parameters.py TIMEOUT 60)
 endif()
