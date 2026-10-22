@@ -33,13 +33,17 @@ class Mpu6050Driver : public rclcpp::Node
 public:
   /// Constructor.
   /// \param i2c  I2C backend to use. Pass nullptr to use the production wiringPi implementation.
+  /// An injected backend is borrowed and must outlive this node, including its destruction.
   Mpu6050Driver(
     const std::string & node_name,
     const rclcpp::NodeOptions & options,
     II2CInterface * i2c = nullptr);
+  /// Stop executor callbacks before destroying the node; cancellation does not join in-flight work.
+  ~Mpu6050Driver() override;
 
 private:
   void initializeI2C();
+  void closeI2C();
   void onTimer();
   bool updateCurrentGyroData();
   bool updateCurrentAccelData();

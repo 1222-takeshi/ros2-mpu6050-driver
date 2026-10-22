@@ -20,6 +20,15 @@ before assessing localization or ROS 2 balancing performance.
 
 ### WiringPi
 
+The driver owns each handle returned by I2C setup and closes it once on wake-up
+failure or node destruction. Custom backends may override `II2CInterface::close`;
+its default no-op preserves compatibility for backends without owned handles.
+An injected backend is borrowed and must outlive the node. When embedding the
+driver in an executor, stop/join callbacks and remove the node before destroying
+it or its backend. Timer cancellation prevents future callbacks but does not
+wait for an already running callback. The standalone executable spins the node
+until shutdown and then destroys it.
+
 On Ubuntu 22.04, WiringPi is not available via apt and must be built from source:
 
 ```sh

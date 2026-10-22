@@ -135,6 +135,23 @@ Mpu6050Driver::Mpu6050Driver(
   initializeI2C();
 }
 
+Mpu6050Driver::~Mpu6050Driver()
+{
+  if (timer_) {
+    timer_->cancel();
+  }
+  timer_.reset();
+  closeI2C();
+}
+
+void Mpu6050Driver::closeI2C()
+{
+  if (fd_ >= 0) {
+    i2c_->close(fd_);
+    fd_ = -1;
+  }
+}
+
 void Mpu6050Driver::initializeI2C()
 {
   fd_ = i2c_->setup(DEV_ADDR);
@@ -147,7 +164,7 @@ void Mpu6050Driver::initializeI2C()
   if (wake_up_result != 0) {
     RCLCPP_ERROR(
       get_logger(), "I2C wake-up write failed with return code %d", wake_up_result);
-    fd_ = -1;
+    closeI2C();
   }
 }
 
