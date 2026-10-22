@@ -11,9 +11,7 @@ permissions:
 
 jobs:
   test:
-    # Public fork PRs must not execute on a host with a persistent runner.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, ARM64, dgx-spark]
+    runs-on: ubuntu-22.04-arm
     timeout-minutes: 30
     container:
       image: rostooling/setup-ros-docker@sha256:ae24d1bd0de2d211c87aed13404b1d06c089c1c581f64d943cf61c59f26b1cce

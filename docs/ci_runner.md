@@ -1,34 +1,25 @@
-# DGX Spark CI
+# GitHub-hosted CI
 
-`spark-d725` 上のrepository専用runner `mpu6050-driver-dgx-spark` で実行する。
-labelsは `self-hosted / Linux / ARM64 / dgx-spark`。倒立repositoryのrunnerと
-ディレクトリ・user serviceを分け、同一hostでもROS通信はcontainerのloopbackへ制限する。
+This public repository uses the standard GitHub-hosted `ubuntu-22.04-arm`
+runner. Standard hosted runners are free for public repositories, including
+ARM64; see the [GitHub runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+DGX Spark remains available for the separate inverted-pendulum repository.
 
-public repositoryなので、GitHub側のfork workflow承認設定を
-`all_external_contributors` にする。YAMLの条件はPR自身が変更できるため、
-サーバー側の設定も必須である。fork workflowを承認してこのrunnerへ流さない。
-YAMLでもfork PRをskipし、`pull_request_target` は使用しない。
-外部変更はreview後にmaintainer管理branchへ取り込み、通常のPRとして検証する。
-repositoryへのwrite権限はこのhostでコードを実行できる信頼境界として扱う。
-移行時にwrite/admin権限を持つのはowner `1222-takeshi` のみであることを確認した。
-collaboratorや承認設定を変更するときは、この信頼境界を再確認する。
+Each job uses a fresh GitHub-hosted VM and a digest-pinned Jammy container with
+ROS 2 Humble. Pushes to `main` and pull requests, including fork pull requests,
+run all registered driver tests and lints. Fork workflow execution remains
+subject to GitHub's repository approval policy. The job has read-only contents
+permission and does not use `pull_request_target`.
 
-workflowはdigest固定のJammy containerにHumbleを導入し、既存の全登録testとlintを実行する。
-workspaceはsource checkoutの外の一意なRUNNER_TEMP配下へ置く。
-失敗時もtest resultsをuploadし、upload後にこのjobのworkspaceを削除する。
-mock testとARM64 buildの成功は、Pi実配線のI2C性能や倒立達成の検証ではない。
+The colcon workspace is created outside the checkout in a unique `RUNNER_TEMP`
+directory. Test results are uploaded even on failure, then that job's temporary
+workspace is removed. Check PR and post-merge `main` runs for the ARM64 runner,
+all test/lint results, artifact upload, and workspace cleanup.
 
-## Runner運用
+After successful migration checks, retire the driver-specific DGX runner
+`mpu6050-driver-dgx-spark` and its user service. The inverted-pendulum runner is
+independent and remains enabled.
 
-- SSH: `ssh tier4-x1@spark-d725`
-- install directory: `/home/tier4-x1/actions-runner-mpu6050-driver`
-- user unit: `actions-runner-mpu6050-driver.service`
-- 確認: `systemctl --user is-active actions-runner-mpu6050-driver.service`
-- 自動起動: user serviceのenableと既存のLinger設定を使用する。再起動試験とは区別する。
-
-runner登録はrepositoryの一時tokenで行い、tokenやrunner認証ファイルを
-repository、log、artifactへ保存しない。runner directoryは所有者のみアクセス可能にする。
-runner binaryは公式releaseのSHA256と照合する。
-
-変更時はPRとmerge後のmainで、runner名・ARM64環境、全test/lint、artifact upload、
-一時workspace削除を確認する。失敗時は診断を保持してから独立した変更として修正する。
+Mock tests, production-backend file-descriptor tests, and ARM64 builds do not
+measure Raspberry Pi I2C timing or qualify balancing. Hardware timing remains
+tracked in #41; integration requirements and results remain in #61–#63.
