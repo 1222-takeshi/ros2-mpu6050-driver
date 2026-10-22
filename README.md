@@ -8,7 +8,7 @@ are described in the [development roadmap](ROADMAP.md).
 Record the target robot and acceptance criteria in the [hardware validation worksheet](docs/hardware_validation.md)
 before assessing localization or ROS 2 balancing performance.
 
-CI runs on the DGX Spark self-hosted ARM64 runner; see [runner operation](docs/ci_runner.md).
+CI runs on GitHub-hosted ARM64 runners; see [CI validation](docs/ci_runner.md).
 
 ## Tested Environment
 
