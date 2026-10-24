@@ -195,6 +195,22 @@ next regular sample. The rejection counter is retained after recovery.
 Consumers must detect missing or stale data and apply their own control stop/recovery
 policy; suppressing publication alone does not stop a robot controller.
 
+### Retired standalone example
+
+The old `src/mpu6050_sample.py` was retired in #55. It was not installed or used by
+the ROS package, opened I2C at import time, and used separate register/conversion
+code with deg/s and g rather than the ROS driver's SI output. Maintaining a second
+hardware reader would obscure the measurement contract. Use the ROS driver and
+the calibration/diagnostics workflow below instead:
+
+```sh
+ros2 launch imu_driver mpu6050_driver.launch.xml
+ros2 topic echo /imu/data_raw
+```
+
+This replaces the legacy raw-bus example; ROS `roll_pitch` remains an independent
+accelerometer-only diagnostic in degrees, with its documented motion limitations.
+
 ### Parameters
 
 The six driver parameters below are **startup-only**. Launch overrides are supported;
