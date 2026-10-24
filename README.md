@@ -197,6 +197,12 @@ policy; suppressing publication alone does not stop a robot controller.
 
 ### Parameters
 
+The six driver parameters below are **startup-only**. Launch overrides are supported;
+runtime changes (`ros2 param set`, including atomic updates) are rejected. Restart the
+node to apply a new configuration. Hardware diagnostics report `Parameter lifecycle`.
+Existing startup validation/fallback behavior and the effective-rate diagnostics are
+unchanged; a supplied invalid startup value can still differ from its fallback output.
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `publish_rate_hz` | double | `100.0` | IMU publish rate in Hz |

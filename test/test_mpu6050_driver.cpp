@@ -264,6 +264,56 @@ static double diagnosticValueAsDouble(
   return std::stod(value->value);
 }
 
+TEST(Mpu6050DriverTest, StartupConfigurationRejectsRuntimeChangesWithoutChangingOutput)
+{
+  MockI2C mock;
+  const std::vector<rclcpp::Parameter> configured{
+    rclcpp::Parameter("publish_rate_hz", 50.0),
+    rclcpp::Parameter("frame_id", "mounted_imu"),
+    rclcpp::Parameter("angular_velocity_bias", std::vector<double>{0.1, 0.0, 0.0}),
+    rclcpp::Parameter("linear_acceleration_bias", std::vector<double>{0.2, 0.0, 0.0}),
+    rclcpp::Parameter("angular_velocity_covariance", std::vector<double>(9, 0.01)),
+    rclcpp::Parameter("linear_acceleration_covariance", std::vector<double>(9, 0.02)),
+  };
+  rclcpp::NodeOptions options;
+  options.parameter_overrides(configured);
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), options, &mock);
+  const std::vector<rclcpp::Parameter> changes{
+    rclcpp::Parameter("publish_rate_hz", 200.0), rclcpp::Parameter("frame_id", "other"),
+    rclcpp::Parameter("angular_velocity_bias", std::vector<double>{1.0, 2.0, 3.0}),
+    rclcpp::Parameter("linear_acceleration_bias", std::vector<double>{1.0, 2.0, 3.0}),
+    rclcpp::Parameter("angular_velocity_covariance", std::vector<double>(9, 1.0)),
+    rclcpp::Parameter("linear_acceleration_covariance", std::vector<double>(9, 1.0)),
+  };
+  for (const auto & change : changes) {
+    EXPECT_TRUE(node->describe_parameter(change.get_name()).read_only);
+    EXPECT_FALSE(node->set_parameter(change).successful);
+  }
+  EXPECT_FALSE(node->set_parameters_atomically(changes).successful);
+  const auto invalid = rclcpp::Parameter("angular_velocity_bias", std::vector<double>{NAN});
+  EXPECT_FALSE(node->set_parameter(invalid).successful);
+  for (const auto & parameter : configured) {
+    EXPECT_EQ(
+      node->get_parameter(parameter.get_name()).value_to_string(), parameter.value_to_string());
+  }
+  const auto messages = spinAndCaptureImuAndRollPitch(node);
+  ASSERT_NE(messages.imu, nullptr);
+  ASSERT_NE(messages.roll_pitch, nullptr);
+  EXPECT_EQ(messages.imu->header.frame_id, "mounted_imu");
+  EXPECT_EQ(messages.roll_pitch->header.frame_id, "mounted_imu");
+  EXPECT_NEAR(messages.imu->angular_velocity.x, -0.1, 1e-6);
+  EXPECT_NEAR(messages.imu->linear_acceleration.x, -0.2, 1e-6);
+  EXPECT_DOUBLE_EQ(messages.imu->angular_velocity_covariance[0], 0.01);
+  EXPECT_DOUBLE_EQ(messages.imu->linear_acceleration_covariance[0], 0.02);
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Hardware Status", &status));
+  const auto * lifecycle = findDiagnosticValue(status, "Parameter lifecycle");
+  ASSERT_NE(lifecycle, nullptr);
+  EXPECT_EQ(lifecycle->value, "startup-only; restart required");
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status));
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Effective publish_rate_hz"), 50.0);
+}
+
 TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
 {
   // PWR_MGMT_1 (0x6B) must be written with 0x00 to wake MPU6050 from sleep.

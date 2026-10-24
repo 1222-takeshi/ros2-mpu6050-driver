@@ -12,6 +12,7 @@
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>diagnostic_msgs</depend>
+  <depend>rcl_interfaces</depend>
   <depend>diagnostic_updater</depend>
   <depend>geometry_msgs</depend>
 
@@ -25,7 +26,6 @@
   <test_depend>launch_ros</test_depend>
   <test_depend>launch_xml</test_depend>
   <test_depend>rclpy</test_depend>
-  <test_depend>rcl_interfaces</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

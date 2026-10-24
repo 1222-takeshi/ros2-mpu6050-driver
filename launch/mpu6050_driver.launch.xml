@@ -1,5 +1,7 @@
 <?xml version="1.0"?>
 <launch>
+  <!-- Driver rate, frame, bias and covariance arguments apply at startup only.
+       Restart the node to change them; runtime parameter updates are rejected. -->
   <arg name="output_imu_name" default="/imu/data_raw" description="output imu raw data" />
   <arg name="publish_rate_hz" default="100.0" description="IMU publish rate in Hz" />
   <arg name="frame_id" default="imu" description="Frame ID for IMU and roll/pitch messages" />

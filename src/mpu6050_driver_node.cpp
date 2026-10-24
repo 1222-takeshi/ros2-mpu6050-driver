@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp/timer.hpp>
 
 #include "imu_driver/detail/sample_validation.hpp"
@@ -77,20 +78,23 @@ Mpu6050Driver::Mpu6050Driver(
     i2c_ = i2c;
   }
 
-  declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ);
-  frame_id_ = declare_parameter<std::string>("frame_id", "imu");
+  rcl_interfaces::msg::ParameterDescriptor startup_only;
+  startup_only.read_only = true;
+  startup_only.description = "Applied at startup; restart the node to change this value.";
+  declare_parameter<double>("publish_rate_hz", DEFAULT_PUBLISH_RATE_HZ, startup_only);
+  frame_id_ = declare_parameter<std::string>("frame_id", "imu", startup_only);
   if (frame_id_.empty()) {
     RCLCPP_WARN(get_logger(), "frame_id must not be empty; falling back to 'imu'");
     frame_id_ = "imu";
   }
   const auto angular_velocity_bias = declare_parameter<std::vector<double>>(
-    "angular_velocity_bias", DEFAULT_BIAS);
+    "angular_velocity_bias", DEFAULT_BIAS, startup_only);
   const auto linear_acceleration_bias = declare_parameter<std::vector<double>>(
-    "linear_acceleration_bias", DEFAULT_BIAS);
+    "linear_acceleration_bias", DEFAULT_BIAS, startup_only);
   const auto angular_velocity_covariance = declare_parameter<std::vector<double>>(
-    "angular_velocity_covariance", DEFAULT_MEASUREMENT_COVARIANCE);
+    "angular_velocity_covariance", DEFAULT_MEASUREMENT_COVARIANCE, startup_only);
   const auto linear_acceleration_covariance = declare_parameter<std::vector<double>>(
-    "linear_acceleration_covariance", DEFAULT_MEASUREMENT_COVARIANCE);
+    "linear_acceleration_covariance", DEFAULT_MEASUREMENT_COVARIANCE, startup_only);
 
   angular_velocity_bias_ = parseBiasParameter("angular_velocity_bias", angular_velocity_bias);
   linear_acceleration_bias_ = parseBiasParameter(
@@ -306,6 +310,7 @@ void Mpu6050Driver::checkHardwareStatus(diagnostic_updater::DiagnosticStatusWrap
 {
   using diagnostic_msgs::msg::DiagnosticStatus;
 
+  stat.add("Parameter lifecycle", "startup-only; restart required");
   stat.add("I2C connection", fd_ == -1 ? "not initialized" : "ok");
   stat.add("Gyro sensitivity", "131 LSB/(deg/s) [+-250 deg/s]");
   stat.add("Accel sensitivity", "16384 LSB/g [+-2g]");
