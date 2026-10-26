@@ -591,7 +591,6 @@ TEST(Mpu6050DriverTest, FallsBackWhenPublishRateIsTooSmallForTimer)
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Effective publish_rate_hz"), 100.0);
 }
 
-
 TEST(Mpu6050DriverTest, DataDiagnosticUsesClampedTimerPeriodForExpectedInterval)
 {
   MockI2C mock;
