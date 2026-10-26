@@ -218,6 +218,8 @@ runtime changes (`ros2 param set`, including atomic updates) are rejected. Resta
 node to apply a new configuration. Hardware diagnostics report `Parameter lifecycle`.
 Existing startup validation/fallback behavior and the effective-rate diagnostics are
 unchanged; a supplied invalid startup value can still differ from its fallback output.
+Positive rates whose millisecond timer period cannot be represented safely fall back to
+the default rate before the timer is constructed.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

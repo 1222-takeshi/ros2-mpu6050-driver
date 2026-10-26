@@ -575,6 +575,22 @@ TEST(Mpu6050DriverTest, PublishesDataDiagnosticTimingFieldsAfterSamples)
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Sample interval tolerance sec"), 0.01);
 }
 
+TEST(Mpu6050DriverTest, FallsBackWhenPublishRateIsTooSmallForTimer)
+{
+  MockI2C mock;
+  auto opts = optionsWithPublishRate(std::numeric_limits<double>::denorm_min());
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  ASSERT_NE(spinAndCapture(node), nullptr);
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status));
+
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Configured publish_rate_hz"), 100.0);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Expected sample interval sec"), 0.01);
+  EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Effective publish_rate_hz"), 100.0);
+}
+
 TEST(Mpu6050DriverTest, DataDiagnosticUsesClampedTimerPeriodForExpectedInterval)
 {
   MockI2C mock;
