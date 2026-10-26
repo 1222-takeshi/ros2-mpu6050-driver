@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -112,7 +113,19 @@ Mpu6050Driver::Mpu6050Driver(
     rate_hz = DEFAULT_PUBLISH_RATE_HZ;
   }
 
-  auto period_ms = static_cast<int64_t>(1000.0 / rate_hz);
+  long double timer_period_ms =
+    1000.0L / static_cast<long double>(rate_hz);
+  if (!std::isfinite(timer_period_ms) ||
+    timer_period_ms >= static_cast<long double>(std::numeric_limits<int64_t>::max()))
+  {
+    RCLCPP_ERROR(
+      get_logger(), "publish_rate_hz %.3e is too small for timer; falling back to %.1f Hz",
+      rate_hz, DEFAULT_PUBLISH_RATE_HZ);
+    rate_hz = DEFAULT_PUBLISH_RATE_HZ;
+    timer_period_ms = 1000.0L / static_cast<long double>(rate_hz);
+  }
+
+  auto period_ms = static_cast<int64_t>(timer_period_ms);
   if (period_ms < MIN_TIMER_PERIOD_MS) {
     RCLCPP_WARN(
       get_logger(), "publish_rate_hz %.3f is above timer resolution; using 1 ms period", rate_hz);
