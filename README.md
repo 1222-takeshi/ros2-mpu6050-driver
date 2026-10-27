@@ -120,13 +120,15 @@ The `frame_id` parameter defaults to `imu` and is applied to both `output` and `
 ros2 launch imu_driver mpu6050_driver.launch.xml frame_id:=imu_link
 ```
 
+The driver publishes `output` as a relative topic name. The standard launch file remaps it to `/imu/data_raw` by default; when starting the executable directly, use the node namespace or an explicit remap to select the final topic name. `roll_pitch` remains a relative topic name and is normally exposed as `/roll_pitch` in the default namespace.
+
 ### Published Topics
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `output` | `sensor_msgs/Imu` | IMU data using ROS SI units (`rad/s` angular velocity, `m/s^2` linear acceleration) |
-| `roll_pitch` | `geometry_msgs/Vector3Stamped` | Roll and pitch angles in degrees (`x=roll`, `y=pitch`, `z=0`) |
-| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Driver health status for ROS diagnostics tools |
+| Publisher name | Standard launch topic | Type | Description |
+|----------------|-----------------------|------|-------------|
+| `output` | `/imu/data_raw` | `sensor_msgs/Imu` | IMU data using ROS SI units (`rad/s` angular velocity, `m/s^2` linear acceleration) |
+| `roll_pitch` | `/roll_pitch` | `geometry_msgs/Vector3Stamped` | Roll and pitch angles in degrees (`x=roll`, `y=pitch`, `z=0`) |
+| `/diagnostics` | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Driver health status for ROS diagnostics tools |
 
 ### IMU Units
 
