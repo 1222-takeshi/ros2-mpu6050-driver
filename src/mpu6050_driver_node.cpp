@@ -210,44 +210,36 @@ void Mpu6050Driver::onTimer()
   imuDataPublish(sample_time);
 }
 
+bool Mpu6050Driver::readAndConvertAxes(
+  unsigned int first_reg,
+  float sensitivity_lsb,
+  float scale,
+  const std::array<double, 3> & bias,
+  std::array<double, 3> & values)
+{
+  for (std::size_t axis = 0; axis < values.size(); ++axis) {
+    float raw_value = 0.0f;
+    if (!read2data(
+        fd_, first_reg + static_cast<unsigned int>(axis * 2), &raw_value))
+    {
+      return false;
+    }
+    values[axis] = raw_value / sensitivity_lsb * scale - bias[axis];
+  }
+  return true;
+}
+
 bool Mpu6050Driver::updateCurrentGyroData()
 {
-  float gyro_x = 0.0f;
-  float gyro_y = 0.0f;
-  float gyro_z = 0.0f;
-  const bool read_ok =
-    read2data(fd_, GYRO_X_OUT, &gyro_x) &&
-    read2data(fd_, GYRO_Y_OUT, &gyro_y) &&
-    read2data(fd_, GYRO_Z_OUT, &gyro_z);
-  if (!read_ok) {
-    return false;
-  }
-  gyro_ = {{
-    gyro_x / GYRO_SENSITIVITY_LSB * DEG_TO_RAD - angular_velocity_bias_[0],
-    gyro_y / GYRO_SENSITIVITY_LSB * DEG_TO_RAD - angular_velocity_bias_[1],
-    gyro_z / GYRO_SENSITIVITY_LSB * DEG_TO_RAD - angular_velocity_bias_[2],
-  }};
-  return true;
+  return readAndConvertAxes(
+    GYRO_X_OUT, GYRO_SENSITIVITY_LSB, DEG_TO_RAD, angular_velocity_bias_, gyro_);
 }
 
 bool Mpu6050Driver::updateCurrentAccelData()
 {
-  float accel_x = 0.0f;
-  float accel_y = 0.0f;
-  float accel_z = 0.0f;
-  const bool read_ok =
-    read2data(fd_, ACCEL_X_OUT, &accel_x) &&
-    read2data(fd_, ACCEL_Y_OUT, &accel_y) &&
-    read2data(fd_, ACCEL_Z_OUT, &accel_z);
-  if (!read_ok) {
-    return false;
-  }
-  accel_ = {{
-    accel_x / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY - linear_acceleration_bias_[0],
-    accel_y / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY - linear_acceleration_bias_[1],
-    accel_z / ACCEL_SENSITIVITY_LSB * STANDARD_GRAVITY - linear_acceleration_bias_[2],
-  }};
-  return true;
+  return readAndConvertAxes(
+    ACCEL_X_OUT, ACCEL_SENSITIVITY_LSB, STANDARD_GRAVITY,
+    linear_acceleration_bias_, accel_);
 }
 
 bool Mpu6050Driver::readReg8Checked(int fd, unsigned int reg, int * value)
