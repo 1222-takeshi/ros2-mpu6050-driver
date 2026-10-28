@@ -219,9 +219,9 @@ bool Mpu6050Driver::readAndConvertAxes(
 {
   for (std::size_t axis = 0; axis < values.size(); ++axis) {
     float raw_value = 0.0f;
-    if (!read2data(
-        fd_, first_reg + static_cast<unsigned int>(axis * 2), &raw_value))
-    {
+    const unsigned int axis_reg =
+      first_reg + static_cast<unsigned int>(axis * 2);
+    if (!read2data(fd_, axis_reg, &raw_value)) {
       return false;
     }
     values[axis] = raw_value / sensitivity_lsb * scale - bias[axis];
