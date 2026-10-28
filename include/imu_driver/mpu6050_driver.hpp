@@ -54,6 +54,12 @@ private:
   bool isLatestSampleValid() const;
   bool readReg8Checked(int fd, unsigned int reg, int * value);
   bool read2data(int fd, unsigned int reg, float * value);
+  bool readAndConvertAxes(
+    unsigned int first_reg,
+    float sensitivity_lsb,
+    float scale,
+    const std::array<double, 3> & bias,
+    std::array<double, 3> & values);
   std::array<double, 3> parseBiasParameter(
     const std::string & parameter_name,
     const std::vector<double> & values) const;
