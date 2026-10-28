@@ -217,15 +217,17 @@ bool Mpu6050Driver::readAndConvertAxes(
   const std::array<double, 3> & bias,
   std::array<double, 3> & values)
 {
-  for (std::size_t axis = 0; axis < values.size(); ++axis) {
+  std::array<double, 3> converted_values{};
+  for (std::size_t axis = 0; axis < converted_values.size(); ++axis) {
     float raw_value = 0.0f;
     const unsigned int axis_reg =
       first_reg + static_cast<unsigned int>(axis * 2);
     if (!read2data(fd_, axis_reg, &raw_value)) {
       return false;
     }
-    values[axis] = raw_value / sensitivity_lsb * scale - bias[axis];
+    converted_values[axis] = raw_value / sensitivity_lsb * scale - bias[axis];
   }
+  values = converted_values;
   return true;
 }
 
