@@ -376,6 +376,7 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
   }
   stat.add("Latest I2C read ok", latest_sample_read_ok_);
   if (!latest_sample_read_ok_) {
+    stat.add("Latest sample valid", latest_sample_valid_);
     stat.summary(DiagnosticStatus::ERROR, "I2C read failed");
     return;
   }
