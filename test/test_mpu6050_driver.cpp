@@ -610,6 +610,29 @@ TEST(Mpu6050DriverTest, DataDiagnosticUsesClampedTimerPeriodForExpectedInterval)
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Sample interval tolerance sec"), 0.001);
 }
 
+TEST(Mpu6050DriverTest, MarksLatestSampleInvalidWhenSampleReadFailsAfterSuccessfulSample)
+{
+  MockI2C mock;
+  rclcpp::NodeOptions opts;
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+
+  ASSERT_NE(spinAndCapture(node), nullptr);
+  mock.reg_values[0x43] = -1;  // GYRO_X high byte read failure
+
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  ASSERT_TRUE(spinAndCaptureDiagnosticStatus(node, "Data Status", &status))
+    << "Expected a data diagnostic status";
+  EXPECT_EQ(status.level, diagnostic_msgs::msg::DiagnosticStatus::ERROR);
+  EXPECT_EQ(status.message, "I2C read failed");
+
+  const auto * latest_sample_valid = findDiagnosticValue(status, "Latest sample valid");
+  ASSERT_NE(latest_sample_valid, nullptr);
+  EXPECT_FALSE(
+    latest_sample_valid->value == "true" ||
+    latest_sample_valid->value == "True" ||
+    latest_sample_valid->value == "1");
+}
+
 TEST(Mpu6050DriverTest, PublishesDataDiagnosticErrorWhenSampleReadFails)
 {
   MockI2C mock;
