@@ -187,6 +187,8 @@ void Mpu6050Driver::initializeI2C()
 
 void Mpu6050Driver::onTimer()
 {
+  latest_sample_read_ok_ = false;
+  latest_sample_valid_ = false;
   if (fd_ == -1) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "I2C not initialized, skipping update");
     return;
