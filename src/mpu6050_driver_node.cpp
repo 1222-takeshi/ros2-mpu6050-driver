@@ -187,6 +187,8 @@ void Mpu6050Driver::initializeI2C()
 
 void Mpu6050Driver::onTimer()
 {
+  latest_sample_read_ok_ = false;
+  latest_sample_valid_ = false;
   if (fd_ == -1) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "I2C not initialized, skipping update");
     return;
@@ -374,6 +376,7 @@ void Mpu6050Driver::checkDataStatus(diagnostic_updater::DiagnosticStatusWrapper 
   }
   stat.add("Latest I2C read ok", latest_sample_read_ok_);
   if (!latest_sample_read_ok_) {
+    stat.add("Latest sample valid", latest_sample_valid_);
     stat.summary(DiagnosticStatus::ERROR, "I2C read failed");
     return;
   }
