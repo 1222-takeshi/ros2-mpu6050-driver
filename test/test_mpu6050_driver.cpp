@@ -1209,10 +1209,10 @@ TEST(Mpu6050DriverTest, ImuMessageAcceptsCovarianceRoundingError)
   expectCovarianceEquals(
     msg->angular_velocity_covariance,
     std::array<double, 9>{
-      0.01, 0.001, 0.002,
-      0.001 + 5e-15, 0.02, 0.003,
-      0.002, 0.003, 0.03,
-    });
+    0.01, 0.001, 0.002,
+    0.001 + 5e-15, 0.02, 0.003,
+    0.002, 0.003, 0.03,
+  });
 }
 
 TEST(Mpu6050DriverTest, ImuMessageFallsBackWhenCovarianceIsNotSymmetric)
