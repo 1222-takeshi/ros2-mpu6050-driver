@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -64,6 +65,56 @@ static constexpr std::array<double, 9> ORIENTATION_NOT_ESTIMATED_COVARIANCE{
 };
 static const std::vector<double> DEFAULT_BIAS(3, 0.0);
 static const std::vector<double> DEFAULT_MEASUREMENT_COVARIANCE(9, 0.0);
+
+static bool isValidCovarianceMatrix(const std::array<double, 9> & covariance)
+{
+  constexpr double kRelativeTolerance = 1e-12;
+  double scale = 0.0;
+  for (const double value : covariance) {
+    scale = std::max(scale, std::fabs(value));
+  }
+  if (scale == 0.0) {
+    return true;  // ROS uses the all-zero matrix for unknown covariance.
+  }
+
+  std::array<double, 9> normalized{};
+  for (std::size_t i = 0; i < covariance.size(); ++i) {
+    normalized[i] = covariance[i] / scale;
+  }
+
+  for (std::size_t row = 0; row < 3; ++row) {
+    for (std::size_t column = row + 1; column < 3; ++column) {
+      if (std::fabs(normalized[row * 3 + column] - normalized[column * 3 + row]) >
+        kRelativeTolerance)
+      {
+        return false;
+      }
+    }
+  }
+
+  // For a symmetric 3x3 matrix, non-negative principal minors are
+  // necessary and sufficient for positive semidefiniteness.
+  const double a = normalized[0];
+  const double b = 0.5 * (normalized[1] + normalized[3]);
+  const double c = 0.5 * (normalized[2] + normalized[6]);
+  const double d = normalized[4];
+  const double e = 0.5 * (normalized[5] + normalized[7]);
+  const double f = normalized[8];
+
+  if (a < -kRelativeTolerance || d < -kRelativeTolerance || f < -kRelativeTolerance) {
+    return false;
+  }
+  if (a * d - b * b < -kRelativeTolerance ||
+    a * f - c * c < -kRelativeTolerance ||
+    d * f - e * e < -kRelativeTolerance)
+  {
+    return false;
+  }
+
+  const double determinant =
+    a * (d * f - e * e) - b * (b * f - c * e) + c * (b * e - c * d);
+  return determinant >= -kRelativeTolerance;
+}
 
 Mpu6050Driver::Mpu6050Driver(
   const std::string & node_name,
@@ -469,6 +520,15 @@ std::array<double, 9> Mpu6050Driver::parseCovarianceParameter(
         parameter_name.c_str(), diagonal_index);
       return {};
     }
+  }
+
+  if (!isValidCovarianceMatrix(covariance)) {
+    RCLCPP_ERROR(
+      get_logger(),
+      "Invalid %s covariance matrix; it must be symmetric and positive semidefinite. "
+      "Falling back to unknown covariance.",
+      parameter_name.c_str());
+    return {};
   }
 
   return covariance;
