@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from pathlib import Path
+import time
 import unittest
 
 from launch import LaunchDescription
@@ -41,6 +42,7 @@ OVERRIDES = {
     'angular_velocity_covariance': [0.0004, 0.0, 0.0, 0.0, 0.0004, 0.0, 0.0, 0.0, 0.0004],
     'linear_acceleration_covariance': [0.04, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.04],
 }
+LAUNCH_TOPIC_OVERRIDES = {'output_imu_name': '/imu/custom_data_raw'}
 
 
 def generate_test_description():
@@ -48,7 +50,10 @@ def generate_test_description():
     cases = []
     for namespace, arguments in (
         ('default_case', {}),
-        ('override_case', {name: str(value) for name, value in OVERRIDES.items()}),
+        ('override_case', {
+            **LAUNCH_TOPIC_OVERRIDES,
+            **{name: str(value) for name, value in OVERRIDES.items()},
+        }),
     ):
         cases.append(GroupAction([
             PushRosNamespace(namespace),
@@ -97,8 +102,20 @@ class TestLaunchParameters(unittest.TestCase):
                     self.assertEqual(value.type, ParameterType.PARAMETER_DOUBLE)
                     self.assertEqual(value.double_value, expected[name])
 
+    def assert_publisher(self, topic):
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            if self.node.get_publishers_info_by_topic(topic):
+                return
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+        self.fail(f'No publisher discovered for {topic}')
+
     def test_default_parameter_types_and_values(self):
         self.assert_parameters('default_case', DEFAULTS)
 
     def test_readme_overrides_reach_node(self):
         self.assert_parameters('override_case', OVERRIDES)
+
+    def test_output_topic_remaps_to_launch_argument(self):
+        self.assert_publisher('/imu/data_raw')
+        self.assert_publisher(LAUNCH_TOPIC_OVERRIDES['output_imu_name'])
