@@ -314,6 +314,19 @@ TEST(Mpu6050DriverTest, StartupConfigurationRejectsRuntimeChangesWithoutChanging
   EXPECT_DOUBLE_EQ(diagnosticValueAsDouble(status, "Effective publish_rate_hz"), 50.0);
 }
 
+TEST(Mpu6050DriverTest, FallsBackToDefaultFrameIdWhenEmpty)
+{
+  MockI2C mock;
+  auto node = std::make_shared<Mpu6050Driver>(
+    testNodeName(), optionsWithFrameId(""), &mock);
+
+  const auto messages = spinAndCaptureImuAndRollPitch(node);
+  ASSERT_NE(messages.imu, nullptr);
+  ASSERT_NE(messages.roll_pitch, nullptr);
+  EXPECT_EQ(messages.imu->header.frame_id, "imu");
+  EXPECT_EQ(messages.roll_pitch->header.frame_id, "imu");
+}
+
 TEST(Mpu6050DriverTest, WakesDeviceFromSleepOnInit)
 {
   // PWR_MGMT_1 (0x6B) must be written with 0x00 to wake MPU6050 from sleep.
