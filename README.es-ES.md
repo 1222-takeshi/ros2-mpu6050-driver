@@ -97,13 +97,21 @@ Ejemplo de anulación:
 ros2 launch imu_driver mpu6050_driver.launch.xml publish_rate_hz:=200.0
 ```
 
-### Tópicos Publicados
+El parámetro `frame_id` se aplica a los mensajes de `output` y `roll_pitch`. De forma predeterminada es `imu`; cámbielo si el árbol TF del robot utiliza otro frame:
 
-| Tópico | Tipo | Descripción |
-|-------|------|-------------|
-| `output` | `sensor_msgs/Imu` | Datos de la IMU utilizando unidades SI de ROS (`rad/s` velocidad angular, `m/s^2` aceleración lineal) |
-| `roll_pitch` | `geometry_msgs/Vector3Stamped` | Ángulos de roll y pitch en grados (`x=roll`, `y=pitch`, `z=0`) |
-| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Estado de salud del driver para herramientas de diagnóstico de ROS |
+```sh
+ros2 launch imu_driver mpu6050_driver.launch.xml frame_id:=imu_link
+```
+
+### Tópicos publicados
+
+| Nombre del publisher | Tópico del launch estándar | Tipo | Descripción |
+|----------------------|----------------------------|------|-------------|
+| `output` | `/imu/data_raw` | `sensor_msgs/Imu` | Datos de la IMU en unidades SI de ROS (`rad/s` velocidad angular, `m/s^2` aceleración lineal) |
+| `roll_pitch` | `/roll_pitch` | `geometry_msgs/Vector3Stamped` | Ángulos de roll y pitch en grados (`x=roll`, `y=pitch`, `z=0`) |
+| `/diagnostics` | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Estado de salud del driver para herramientas de diagnóstico de ROS |
+
+El launch estándar remapea `output` a `/imu/data_raw`. Si ejecuta el binario directamente, use el namespace del nodo o un remap explícito para elegir el nombre final del tópico; `roll_pitch` sigue siendo un nombre relativo.
 
 ### Unidades de la IMU
 
@@ -153,9 +161,12 @@ Para comprobaciones de temporización en el hardware, ejecute el nodo bajo la ca
 
 ### Parámetros
 
+Los seis parámetros siguientes se aplican solo al iniciar el nodo. Los cambios en tiempo de ejecución se rechazan; reinicie el nodo para aplicar una nueva configuración.
+
 | Parámetro | Tipo | Predeterminado | Descripción |
-|-----------|------|---------|-------------|
+|-----------|------|----------------|-------------|
 | `publish_rate_hz` | double | `100.0` | Tasa de publicación de la IMU en Hz |
+| `frame_id` | string | `imu` | Frame ID de los mensajes `output` y `roll_pitch` |
 | `angular_velocity_bias` | double[3] | `[0.0, 0.0, 0.0]` | Sesgo estático del giro a restar de `angular_velocity` en `rad/s` |
 | `linear_acceleration_bias` | double[3] | `[0.0, 0.0, 0.0]` | Sesgo estático del acelerómetro a restar de `linear_acceleration` en `m/s^2` |
 | `angular_velocity_covariance` | double[9] | `[0.0, ...]` | Covarianza row-major para `angular_velocity`; todo ceros significa desconocido |
