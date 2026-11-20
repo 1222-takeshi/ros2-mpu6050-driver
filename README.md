@@ -251,6 +251,12 @@ For an initial stationary bias estimate:
 This is a static correction only. Re-estimate the offsets when the sensor, mounting, or operating environment changes.
 
 Covariance parameters map directly to the 3x3 row-major arrays in `sensor_msgs/Imu`.
+The driver accepts finite, symmetric positive-semidefinite matrices. Symmetry and
+positive-semidefinite checks use a relative tolerance of `1e-12` to allow floating-point
+rounding. The all-zero matrix remains valid and means unknown covariance. If the size,
+finite-value, diagonal, symmetry, or positive-semidefinite check fails, the driver logs an
+ERROR and falls back to the all-zero unknown covariance without stopping the node.
+
 For a diagonal-only configuration, keep off-diagonal terms at `0.0`:
 
 ```sh
