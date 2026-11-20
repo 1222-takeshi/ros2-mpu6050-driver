@@ -24,7 +24,7 @@ jobs:
       # Ubuntu 22.04 ships cppcheck 2.7, which ament otherwise skips.
       AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: ros-tooling/setup-ros@v0.7
         with:
@@ -72,7 +72,7 @@ jobs:
           colcon test-result --verbose
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: test-results
