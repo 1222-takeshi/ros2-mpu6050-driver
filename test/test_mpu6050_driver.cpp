@@ -355,6 +355,21 @@ TEST(Mpu6050DriverTest, HandlesI2CSetupFailureGracefully)
   });
 }
 
+TEST(Mpu6050DriverTest, TreatsAnyNegativeI2CSetupResultAsFailure)
+{
+  MockI2C mock;
+  mock.setup_return_value = -2;
+  rclcpp::NodeOptions opts;
+
+  auto node = std::make_shared<Mpu6050Driver>(testNodeName(), opts, &mock);
+  ASSERT_NE(node, nullptr);
+
+  EXPECT_EQ(mock.written_regs.count(0x6B), 0u)
+    << "PWR_MGMT_1 must not be written for any negative setup result";
+  EXPECT_EQ(spinAndCapture(node, std::chrono::milliseconds(100)), nullptr)
+    << "A negative setup result must prevent IMU publishing";
+}
+
 TEST(Mpu6050DriverTest, DoesNotWritePwrMgmtWhenSetupFails)
 {
   MockI2C mock;
