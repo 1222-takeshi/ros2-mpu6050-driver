@@ -172,8 +172,9 @@ void Mpu6050Driver::closeI2C()
 void Mpu6050Driver::initializeI2C()
 {
   fd_ = i2c_->setup(DEV_ADDR);
-  if (fd_ == -1) {
+  if (fd_ < 0) {
     RCLCPP_ERROR(get_logger(), "I2C setup failed: no device found at address 0x%02X", DEV_ADDR);
+    fd_ = -1;
     return;
   }
   // Wake the MPU6050 from sleep mode (SLEEP bit in PWR_MGMT_1 is set on power-on).
